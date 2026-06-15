@@ -3,6 +3,7 @@ import { Survey } from "../surveys/survey.model";
 import { Withdrawal } from "../wallets/withdrawal.model";
 import { Transaction } from "../wallets/transaction.model";
 import { paystackService } from "../../providers/paystack/paystack.service";
+import * as billingService from "../billing/billing.service";
 import { AppError } from "../../utils/errors";
 
 export const verifyPayment = async (reference: string) => {
@@ -10,7 +11,7 @@ export const verifyPayment = async (reference: string) => {
   if (!payment) throw new AppError("Payment not found", 404);
 
   if (payment.status === "SUCCESS") {
-    return { payment, alreadyVerified: true };
+    return { payment, alreadyVerified: true, purpose: payment.purpose };
   }
 
   const verification = await paystackService.verifyTransaction(reference);
@@ -23,19 +24,53 @@ export const verifyPayment = async (reference: string) => {
   payment.status = "SUCCESS";
   await payment.save();
 
-  const survey = await Survey.findById(payment.surveyId);
-  if (survey) {
-    survey.status = "ACTIVE";
-    await survey.save();
+  const researcherId = payment.researcherId.toString();
+
+  if (payment.purpose === "PREPAID") {
+    const survey = await Survey.findById(payment.surveyId);
+    if (survey) {
+      survey.status = "ACTIVE";
+      await survey.save();
+    }
+    return { payment, survey, alreadyVerified: false, purpose: payment.purpose };
   }
 
-  return { payment, survey, alreadyVerified: false };
+  if (payment.purpose === "CARD_SETUP") {
+    const cardResult = await billingService.handleCardSetupSuccess(
+      researcherId,
+      payment,
+      verification.authorization
+    );
+    return {
+      payment,
+      alreadyVerified: false,
+      purpose: payment.purpose,
+      ...cardResult,
+    };
+  }
+
+  if (payment.purpose === "DEBT_SETTLEMENT") {
+    await billingService.handleDebtSettlementSuccess(researcherId, payment);
+    return { payment, alreadyVerified: false, purpose: payment.purpose };
+  }
+
+  return { payment, alreadyVerified: false, purpose: payment.purpose };
 };
 
 export const handlePaystackWebhook = async (event: string, data: Record<string, unknown>) => {
   if (event === "charge.success") {
     const reference = data.reference as string;
     if (reference) await verifyPayment(reference);
+  }
+
+  if (event === "charge.failed") {
+    const reference = data.reference as string;
+    if (!reference) return;
+    const payment = await Payment.findOne({ reference });
+    if (payment && payment.status === "PENDING") {
+      payment.status = "FAILED";
+      await payment.save();
+    }
   }
 
   if (event === "transfer.success" || event === "transfer.failed") {

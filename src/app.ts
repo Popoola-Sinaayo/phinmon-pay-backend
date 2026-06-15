@@ -13,6 +13,7 @@ import surveysRoutes from "./modules/surveys/surveys.routes";
 import responsesRoutes from "./modules/responses/responses.routes";
 import walletsRoutes from "./modules/wallets/wallets.routes";
 import paymentsRoutes from "./modules/payments/payments.routes";
+import billingRoutes from "./modules/billing/billing.routes";
 import adminRoutes from "./modules/admin/admin.routes";
 
 const app = express();
@@ -39,6 +40,7 @@ app.use("/api/v1/surveys", surveysRoutes);
 app.use("/api/v1/responses", responsesRoutes);
 app.use("/api/v1/wallet", walletsRoutes);
 app.use("/api/v1/payments", paymentsRoutes);
+app.use("/api/v1/billing", billingRoutes);
 app.use("/api/v1/admin", adminRoutes);
 
 app.use(errorHandler);

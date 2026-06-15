@@ -10,6 +10,11 @@ export const calculateSurveyCost = (
   return { budget, platformFee, totalCost };
 };
 
+export const calculatePerResponseCost = (payoutPerResponse: number) => {
+  const platformFee = payoutPerResponse * (config().PLATFORM_FEE_PERCENT / 100);
+  return payoutPerResponse + platformFee;
+};
+
 export const isEligibleForSurvey = (
   targetAudience: string,
   ninVerified: boolean,

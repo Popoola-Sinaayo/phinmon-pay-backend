@@ -11,6 +11,21 @@ export interface PaystackVerifyResult {
   success: boolean;
   amount: number;
   reference: string;
+  authorization?: {
+    authorizationCode: string;
+    reusable: boolean;
+    cardType: string;
+    last4: string;
+    expMonth: string;
+    expYear: string;
+    bank: string;
+  };
+}
+
+export interface PaystackChargeResult {
+  success: boolean;
+  reference: string;
+  message?: string;
 }
 
 export interface BankResolveResult {
@@ -56,7 +71,7 @@ export class PaystackService {
   }): Promise<PaystackInitResult> {
     if (!this.isConfigured()) {
       return {
-        authorizationUrl: `${config().FRONTEND_URL}/researcher/campaigns/payment/callback?reference=${params.reference}&mock=true`,
+        authorizationUrl: `${params.callbackUrl}?reference=${params.reference}&mock=true`,
         accessCode: "mock_access_code",
         reference: params.reference,
       };
@@ -70,6 +85,7 @@ export class PaystackService {
         reference: params.reference,
         callback_url: params.callbackUrl,
         metadata: params.metadata,
+        channels: ["card"],
       },
       { headers: this.headers }
     );
@@ -82,6 +98,44 @@ export class PaystackService {
     };
   }
 
+  async chargeAuthorization(params: {
+    authorizationCode: string;
+    email: string;
+    amount: number;
+    reference: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<PaystackChargeResult> {
+    if (!this.isConfigured()) {
+      return { success: true, reference: params.reference };
+    }
+
+    try {
+      const response = await axios.post(
+        `${this.baseUrl}/transaction/charge_authorization`,
+        {
+          authorization_code: params.authorizationCode,
+          email: params.email,
+          amount: Math.round(params.amount * 100),
+          reference: params.reference,
+          metadata: params.metadata,
+        },
+        { headers: this.headers }
+      );
+
+      const data = response.data.data;
+      return {
+        success: data.status === "success",
+        reference: data.reference,
+        message: response.data.message,
+      };
+    } catch (err: unknown) {
+      const message =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Charge failed";
+      return { success: false, reference: params.reference, message };
+    }
+  }
+
   async verifyTransaction(reference: string): Promise<PaystackVerifyResult> {
     if (!this.isConfigured()) {
       return { success: true, amount: 0, reference };
@@ -92,10 +146,22 @@ export class PaystackService {
     });
 
     const data = response.data.data;
+    const auth = data.authorization;
     return {
       success: data.status === "success",
       amount: data.amount / 100,
       reference: data.reference,
+      authorization: auth
+        ? {
+            authorizationCode: auth.authorization_code,
+            reusable: auth.reusable === true,
+            cardType: auth.card_type || "card",
+            last4: auth.last4 || "0000",
+            expMonth: String(auth.exp_month || ""),
+            expYear: String(auth.exp_year || ""),
+            bank: auth.bank || "",
+          }
+        : undefined,
     };
   }
 

@@ -3,9 +3,11 @@ import { Survey, ISurvey, IQuestion } from "./survey.model";
 import { SurveyResponse } from "../responses/response.model";
 import { Payment } from "../payments/payment.model";
 import { paystackService } from "../../providers/paystack/paystack.service";
-import { calculateSurveyCost, isEligibleForSurvey } from "../../utils/surveyHelpers";
+import { calculateSurveyCost, calculatePerResponseCost, isEligibleForSurvey } from "../../utils/surveyHelpers";
 import { AppError } from "../../utils/errors";
 import config from "../../config";
+import * as billingService from "../billing/billing.service";
+import { PaymentMethod } from "../billing/paymentMethod.model";
 
 export const createSurvey = async (
   researcherId: string,
@@ -32,6 +34,8 @@ export const createSurvey = async (
     budget,
     platformFee,
     totalCost,
+    spendingCap: data.spendingCap ?? totalCost,
+    billingModel: data.billingModel || "PREPAID",
     status: "DRAFT",
   });
 
@@ -55,6 +59,9 @@ export const updateSurvey = async (
     data.budget = budget;
     data.platformFee = platformFee;
     data.totalCost = totalCost;
+    if (data.spendingCap === undefined && survey.billingModel === "PAYG") {
+      data.spendingCap = totalCost;
+    }
   }
 
   Object.assign(survey, data);
@@ -77,13 +84,33 @@ export const getSurveyById = async (surveyId: string, researcherId?: string) => 
 export const launchSurvey = async (
   researcherId: string,
   surveyId: string,
-  email: string
+  email: string,
+  options?: { billingModel?: "PREPAID" | "PAYG"; spendingCap?: number }
 ) => {
   const survey = await Survey.findOne({ _id: surveyId, researcherId });
   if (!survey) throw new AppError("Survey not found", 404);
   if (survey.status !== "DRAFT") throw new AppError("Survey cannot be launched", 400);
   if (!survey.questions.length) throw new AppError("Survey must have questions", 400);
 
+  if (options?.billingModel) survey.billingModel = options.billingModel;
+  if (options?.spendingCap !== undefined) survey.spendingCap = options.spendingCap;
+  if (survey.billingModel === "PAYG" && !survey.spendingCap) {
+    survey.spendingCap = survey.totalCost;
+  }
+  await survey.save();
+
+  if (survey.billingModel === "PAYG") {
+    return launchPaygSurvey(researcherId, survey, email);
+  }
+
+  return launchPrepaidSurvey(researcherId, survey, email);
+};
+
+const launchPrepaidSurvey = async (
+  researcherId: string,
+  survey: ISurvey,
+  email: string
+) => {
   const reference = `IPY-${uuidv4()}`;
   const payment = await Payment.create({
     surveyId: survey._id,
@@ -91,6 +118,7 @@ export const launchSurvey = async (
     amount: survey.totalCost,
     reference,
     status: "PENDING",
+    purpose: "PREPAID",
     provider: "paystack",
   });
 
@@ -99,7 +127,7 @@ export const launchSurvey = async (
     amount: survey.totalCost,
     reference,
     callbackUrl: `${config().FRONTEND_URL}/researcher/campaigns/payment/callback`,
-    metadata: { surveyId: survey._id.toString(), paymentId: payment._id.toString() },
+    metadata: { surveyId: survey._id.toString(), paymentId: payment._id.toString(), purpose: "PREPAID" },
   });
 
   payment.paystackAccessCode = init.accessCode;
@@ -110,9 +138,55 @@ export const launchSurvey = async (
   await survey.save();
 
   return {
+    billingModel: "PREPAID" as const,
     authorizationUrl: init.authorizationUrl,
     reference: init.reference,
     amount: survey.totalCost,
+  };
+};
+
+const launchPaygSurvey = async (researcherId: string, survey: ISurvey, email: string) => {
+  const account = await billingService.getOrCreateBillingAccount(researcherId);
+
+  if (account.outstandingDebt > 0) {
+    throw new AppError(
+      "Outstanding balance must be settled before launching a pay-as-you-go campaign",
+      402
+    );
+  }
+
+  const paymentMethod = account.defaultPaymentMethodId
+    ? await PaymentMethod.findById(account.defaultPaymentMethodId)
+    : await PaymentMethod.findOne({ researcherId, isDefault: true, isActive: true });
+
+  if (!paymentMethod) {
+    survey.status = "PENDING_PAYMENT";
+    await survey.save();
+
+    const setup = await billingService.initializeCardSetup(
+      researcherId,
+      email,
+      survey._id.toString()
+    );
+
+    return {
+      billingModel: "PAYG" as const,
+      requiresCardSetup: true,
+      authorizationUrl: setup.authorizationUrl,
+      reference: setup.reference,
+      amount: 100,
+      spendingCap: survey.spendingCap,
+    };
+  }
+
+  await billingService.activatePaygSurvey(survey);
+
+  return {
+    billingModel: "PAYG" as const,
+    requiresCardSetup: false,
+    survey,
+    spendingCap: survey.spendingCap,
+    perResponseCost: calculatePerResponseCost(survey.payoutPerResponse),
   };
 };
 
@@ -126,6 +200,7 @@ export const getAvailableSurveys = async (
 
   let surveys = await Survey.find({
     status: "ACTIVE",
+    billingLocked: { $ne: true },
     _id: { $nin: completedIds },
     $expr: { $lt: ["$responsesReceived", "$responsesNeeded"] },
   }).sort({ createdAt: -1 });
@@ -193,9 +268,11 @@ export const getResearcherDashboard = async (researcherId: string) => {
   const surveys = await Survey.find({ researcherId });
   const activeCampaigns = surveys.filter((s) => s.status === "ACTIVE").length;
   const responsesReceived = surveys.reduce((sum, s) => sum + s.responsesReceived, 0);
-  const fundsSpent = surveys
-    .filter((s) => s.status !== "DRAFT")
-    .reduce((sum, s) => sum + s.totalCost, 0);
+  const fundsSpent = surveys.reduce((sum, s) => {
+    if (s.billingModel === "PAYG") return sum + (s.amountSpent || 0);
+    if (s.status !== "DRAFT") return sum + s.totalCost;
+    return sum;
+  }, 0);
   const totalNeeded = surveys.reduce((sum, s) => sum + s.responsesNeeded, 0);
   const completionRate = totalNeeded > 0 ? (responsesReceived / totalNeeded) * 100 : 0;
 

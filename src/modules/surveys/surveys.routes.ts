@@ -31,6 +31,8 @@ router.post(
       payoutPerResponse: Joi.number().min(100).required(),
       responsesNeeded: Joi.number().min(1).required(),
       estimatedMinutes: Joi.number().optional(),
+      billingModel: Joi.string().valid("PREPAID", "PAYG").default("PREPAID"),
+      spendingCap: Joi.number().min(100).optional(),
       questions: Joi.array().items(questionSchema).default([]),
     })
   ),
@@ -102,6 +104,8 @@ router.patch(
       payoutPerResponse: Joi.number().min(100).optional(),
       responsesNeeded: Joi.number().min(1).optional(),
       estimatedMinutes: Joi.number().optional(),
+      billingModel: Joi.string().valid("PREPAID", "PAYG").optional(),
+      spendingCap: Joi.number().min(100).optional(),
       questions: Joi.array().items(questionSchema).optional(),
     })
   ),
@@ -119,11 +123,21 @@ router.post(
   "/:id/launch",
   requireAuth,
   requireRole("researcher", "admin"),
+  validate(
+    Joi.object({
+      billingModel: Joi.string().valid("PREPAID", "PAYG").optional(),
+      spendingCap: Joi.number().min(100).optional(),
+    })
+  ),
   asyncHandler(async (req, res) => {
     const result = await surveysService.launchSurvey(
       req.user!._id.toString(),
       String(req.params.id),
-      req.user!.email
+      req.user!.email,
+      {
+        billingModel: req.body.billingModel,
+        spendingCap: req.body.spendingCap,
+      }
     );
     res.json({ success: true, ...result });
   })

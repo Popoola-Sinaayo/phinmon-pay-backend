@@ -1,7 +1,14 @@
 import mongoose, { Document, Schema, Types } from "mongoose";
 
 export type SurveyAudience = "ALL_VERIFIED" | "PREMIUM_ONLY" | "ALL_USERS";
-export type SurveyStatus = "DRAFT" | "PENDING_PAYMENT" | "ACTIVE" | "COMPLETED" | "CANCELLED";
+export type SurveyStatus =
+  | "DRAFT"
+  | "PENDING_PAYMENT"
+  | "ACTIVE"
+  | "PAUSED"
+  | "COMPLETED"
+  | "CANCELLED";
+export type BillingModel = "PREPAID" | "PAYG";
 export type QuestionType =
   | "text"
   | "single_choice"
@@ -32,6 +39,11 @@ export interface ISurvey extends Document {
   responsesNeeded: number;
   responsesReceived: number;
   status: SurveyStatus;
+  billingModel: BillingModel;
+  spendingCap: number;
+  amountSpent: number;
+  billingLocked: boolean;
+  billingLockReason?: string;
   questions: IQuestion[];
   estimatedMinutes?: number;
   createdAt: Date;
@@ -73,9 +85,18 @@ const surveySchema = new Schema<ISurvey>(
     responsesReceived: { type: Number, default: 0 },
     status: {
       type: String,
-      enum: ["DRAFT", "PENDING_PAYMENT", "ACTIVE", "COMPLETED", "CANCELLED"],
+      enum: ["DRAFT", "PENDING_PAYMENT", "ACTIVE", "PAUSED", "COMPLETED", "CANCELLED"],
       default: "DRAFT",
     },
+    billingModel: {
+      type: String,
+      enum: ["PREPAID", "PAYG"],
+      default: "PREPAID",
+    },
+    spendingCap: { type: Number, default: 0 },
+    amountSpent: { type: Number, default: 0 },
+    billingLocked: { type: Boolean, default: false },
+    billingLockReason: { type: String },
     questions: [questionSchema],
     estimatedMinutes: { type: Number, default: 10 },
   },
