@@ -12,8 +12,8 @@ router.post(
   requireAuth,
   validate(
     Joi.object({
-      name: Joi.string().required(),
-      age: Joi.number().min(16).max(100).required(),
+      name: Joi.string().min(2).required(),
+      dateOfBirth: Joi.string().isoDate().required(),
       gender: Joi.string().required(),
       state: Joi.string().required(),
       occupation: Joi.string().required(),
@@ -39,8 +39,8 @@ router.patch(
   requireAuth,
   validate(
     Joi.object({
-      name: Joi.string().optional(),
-      age: Joi.number().min(16).max(100).optional(),
+      name: Joi.string().min(2).optional(),
+      dateOfBirth: Joi.string().isoDate().optional(),
       gender: Joi.string().optional(),
       state: Joi.string().optional(),
       occupation: Joi.string().optional(),

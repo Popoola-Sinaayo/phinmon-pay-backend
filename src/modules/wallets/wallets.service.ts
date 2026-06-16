@@ -100,7 +100,7 @@ export const requestWithdrawal = async (
       amount,
       recipientCode: bank.recipientCode,
       reference,
-      reason: "InsightPay earnings withdrawal",
+      reason: "Phinmon earnings withdrawal",
     });
 
     withdrawal.paystackTransferCode = transfer.transferCode;

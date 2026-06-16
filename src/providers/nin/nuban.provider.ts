@@ -27,6 +27,7 @@ export class NubanNINProvider implements NINProvider {
           success: true,
           firstName: data.first_name || data.firstName,
           lastName: data.last_name || data.lastName,
+          dateOfBirth: data.date_of_birth || data.dateOfBirth || data.dob,
           message: "NIN verified successfully",
         };
       }

@@ -48,7 +48,7 @@ app.use(errorHandler);
 connectToDB()
   .then(() => {
     app.listen(config().PORT, () => {
-      console.log(`InsightPay API running on port ${config().PORT}`);
+      console.log(`Phinmon API running on port ${config().PORT}`);
     });
   })
   .catch((err) => {

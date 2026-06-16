@@ -22,7 +22,7 @@ export const requestOtp = async (email: string, role?: string) => {
     const emailProvider = getEmailProvider();
     await emailProvider.send({
       to: normalizedEmail,
-      subject: "Welcome to InsightPay",
+      subject: "Welcome to Phinmon",
       html: welcomeEmailTemplate(""),
     });
   }
@@ -39,7 +39,7 @@ export const requestOtp = async (email: string, role?: string) => {
   const emailProvider = getEmailProvider();
   await emailProvider.send({
     to: normalizedEmail,
-    subject: "Your InsightPay verification code",
+    subject: "Your Phinmon verification code",
     html: otpEmailTemplate(code),
   });
 

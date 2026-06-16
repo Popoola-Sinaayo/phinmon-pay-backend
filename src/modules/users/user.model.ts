@@ -11,6 +11,8 @@ export interface IUser extends Document {
   livenessVerified: boolean;
   status: UserStatus;
   encryptedNin?: string;
+  ninLockedUntil?: Date;
+  ninMismatchCount?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -32,6 +34,8 @@ const userSchema = new Schema<IUser>(
       default: "PENDING_VERIFICATION",
     },
     encryptedNin: { type: String },
+    ninLockedUntil: { type: Date },
+    ninMismatchCount: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

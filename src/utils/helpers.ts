@@ -13,7 +13,7 @@ export const sanitizeUser = (user: IUser) => ({
 
 export const otpEmailTemplate = (code: string) => `
   <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
-    <h2 style="color: #16a34a;">InsightPay</h2>
+    <h2 style="color: #7b61ff;">Phinmon</h2>
     <p>Your verification code is:</p>
     <h1 style="letter-spacing: 8px; color: #1e40af;">${code}</h1>
     <p>This code expires in 10 minutes.</p>
@@ -22,7 +22,7 @@ export const otpEmailTemplate = (code: string) => `
 
 export const welcomeEmailTemplate = (name: string) => `
   <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
-    <h2 style="color: #16a34a;">Welcome to InsightPay${name ? `, ${name}` : ""}!</h2>
+    <h2 style="color: #7b61ff;">Welcome to Phinmon${name ? `, ${name}` : ""}!</h2>
     <p>Start earning by completing verified surveys or launch your first research campaign.</p>
   </div>
 `;
