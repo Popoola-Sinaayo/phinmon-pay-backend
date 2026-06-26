@@ -10,7 +10,13 @@ export interface NINResult {
   success: boolean;
   firstName?: string;
   lastName?: string;
+  middleName?: string;
   dateOfBirth?: string;
+  gender?: string;
+  phone?: string;
+  email?: string;
+  photo?: string;
+  providerId?: number;
   message?: string;
 }
 

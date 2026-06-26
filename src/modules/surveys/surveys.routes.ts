@@ -2,14 +2,23 @@ import { Router } from "express";
 import Joi from "joi";
 import { asyncHandler } from "../../middleware/errorHandler";
 import { validate } from "../../middleware/validate";
-import { requireAuth, requireRole, requireNinVerified } from "../../middleware/auth";
+import { requireAuth, requireRole } from "../../middleware/auth";
 import * as surveysService from "./surveys.service";
 
 const questionSchema = Joi.object({
   questionId: Joi.string().optional(),
   questionText: Joi.string().required(),
   type: Joi.string()
-    .valid("text", "single_choice", "multiple_choice", "number", "rating", "boolean")
+    .valid(
+      "text",
+      "text_short",
+      "text_long",
+      "single_choice",
+      "multiple_choice",
+      "number",
+      "rating",
+      "boolean"
+    )
     .required(),
   required: Joi.boolean().default(true),
   options: Joi.array().items(Joi.string()).optional(),
@@ -17,6 +26,35 @@ const questionSchema = Joi.object({
 });
 
 const router = Router();
+
+router.post(
+  "/preview-cost",
+  requireAuth,
+  requireRole("researcher", "admin"),
+  validate(
+    Joi.object({
+      questions: Joi.array().items(questionSchema).default([]),
+      responsesNeeded: Joi.number().min(1).required(),
+      targetAudience: Joi.string()
+        .valid("ALL_VERIFIED", "PREMIUM_ONLY")
+        .default("ALL_VERIFIED"),
+    })
+  ),
+  asyncHandler(async (req, res) => {
+    const pricing = surveysService.previewSurveyCost(req.body);
+    res.json({
+      success: true,
+      estimatedTimeSeconds: pricing.estimatedCompletionTimeSeconds,
+      estimatedTimeMinutes: pricing.estimatedCompletionTimeMinutes,
+      rewardPerResponseStandard: pricing.rewardPerResponseStandard,
+      rewardPerResponsePremium: pricing.rewardPerResponsePremium,
+      platformFeeRate: pricing.platformFeeRate,
+      platformFeeAmount: pricing.platformFeeAmount,
+      totalCost: pricing.totalCost,
+      highComplexity: pricing.highComplexity,
+    });
+  })
+);
 
 router.post(
   "/",
@@ -28,11 +66,7 @@ router.post(
       description: Joi.string().required(),
       category: Joi.string().optional(),
       targetAudience: Joi.string().valid("ALL_VERIFIED", "PREMIUM_ONLY").default("ALL_VERIFIED"),
-      payoutPerResponse: Joi.number().min(100).required(),
       responsesNeeded: Joi.number().min(1).required(),
-      estimatedMinutes: Joi.number().optional(),
-      billingModel: Joi.string().valid("PREPAID", "PAYG").default("PREPAID"),
-      spendingCap: Joi.number().min(100).optional(),
       questions: Joi.array().items(questionSchema).default([]),
     })
   ),
@@ -56,7 +90,6 @@ router.get(
   "/available",
   requireAuth,
   requireRole("respondent", "admin"),
-  requireNinVerified,
   asyncHandler(async (req, res) => {
     const surveys = await surveysService.getAvailableSurveys(
       req.user!._id.toString(),
@@ -101,11 +134,7 @@ router.patch(
       description: Joi.string().optional(),
       category: Joi.string().optional(),
       targetAudience: Joi.string().valid("ALL_VERIFIED", "PREMIUM_ONLY").optional(),
-      payoutPerResponse: Joi.number().min(100).optional(),
       responsesNeeded: Joi.number().min(1).optional(),
-      estimatedMinutes: Joi.number().optional(),
-      billingModel: Joi.string().valid("PREPAID", "PAYG").optional(),
-      spendingCap: Joi.number().min(100).optional(),
       questions: Joi.array().items(questionSchema).optional(),
     })
   ),
@@ -123,21 +152,12 @@ router.post(
   "/:id/launch",
   requireAuth,
   requireRole("researcher", "admin"),
-  validate(
-    Joi.object({
-      billingModel: Joi.string().valid("PREPAID", "PAYG").optional(),
-      spendingCap: Joi.number().min(100).optional(),
-    })
-  ),
+  validate(Joi.object({})),
   asyncHandler(async (req, res) => {
     const result = await surveysService.launchSurvey(
       req.user!._id.toString(),
       String(req.params.id),
-      req.user!.email,
-      {
-        billingModel: req.body.billingModel,
-        spendingCap: req.body.spendingCap,
-      }
+      req.user!.email
     );
     res.json({ success: true, ...result });
   })

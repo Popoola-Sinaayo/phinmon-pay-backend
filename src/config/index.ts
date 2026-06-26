@@ -18,15 +18,22 @@ const config = () => ({
   PAYSTACK_SECRET_KEY: process.env.PAYSTACK_SECRET_KEY || "",
   PAYSTACK_PUBLIC_KEY: process.env.PAYSTACK_PUBLIC_KEY || "",
   PAYSTACK_WEBHOOK_SECRET: process.env.PAYSTACK_WEBHOOK_SECRET || "",
-  NIN_PROVIDER: process.env.NIN_PROVIDER || "mock",
+  NIN_PROVIDER: process.env.NIN_PROVIDER || "qoreid",
   NUBAN_API_KEY: process.env.NUBAN_API_KEY || "",
   NUBAN_API_URL: process.env.NUBAN_API_URL || "https://api.nuban.com.ng/v1",
+  QOREID_CLIENT_ID: process.env.QOREID_CLIENT_ID || "",
+  QOREID_SECRET: process.env.QOREID_SECRET || "",
+  QOREID_API_URL: process.env.QOREID_API_URL || "https://api.qoreid.com",
+  QOREID_NIN_LIVENESS_PRODUCT_CODE:
+    process.env.QOREID_NIN_LIVENESS_PRODUCT_CODE || "liveness_nin",
   NIN_ENCRYPTION_KEY: process.env.NIN_ENCRYPTION_KEY || "32-char-secret-key-change-me!!",
   FEATURE_LIVENESS: process.env.FEATURE_LIVENESS === "true",
-  LIVENESS_PROVIDER: process.env.LIVENESS_PROVIDER || "mock",
-  PLATFORM_FEE_PERCENT: parseFloat(process.env.PLATFORM_FEE_PERCENT || "15"),
+  LIVENESS_PROVIDER: process.env.LIVENESS_PROVIDER || "qoreid",
+  PLATFORM_FEE_PERCENT: parseFloat(process.env.PLATFORM_FEE_PERCENT || "25"),
   MIN_WITHDRAWAL_AMOUNT: parseFloat(process.env.MIN_WITHDRAWAL_AMOUNT || "1000"),
   AUTO_APPROVE_RESPONSES: process.env.AUTO_APPROVE_RESPONSES !== "false",
+  FEATURE_TIME_BASED_PRICING: process.env.FEATURE_TIME_BASED_PRICING !== "false",
+  FEATURE_PREMIUM_MULTIPLIER: process.env.FEATURE_PREMIUM_MULTIPLIER !== "false",
 });
 
 export type AppConfig = ReturnType<typeof config>;

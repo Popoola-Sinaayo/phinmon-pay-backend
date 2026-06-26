@@ -1,6 +1,13 @@
+export interface LivenessStartOptions {
+  idNumber?: string;
+}
+
 export interface LivenessStartResult {
   sessionId: string;
+  sdkSessionToken?: string;
+  customerReference?: string;
   redirectUrl?: string;
+  idNumber?: string;
 }
 
 export interface LivenessCompletePayload {
@@ -14,6 +21,6 @@ export interface LivenessResult {
 }
 
 export interface LivenessProvider {
-  startVerification(userId: string): Promise<LivenessStartResult>;
+  startVerification(userId: string, options?: LivenessStartOptions): Promise<LivenessStartResult>;
   completeVerification(payload: LivenessCompletePayload): Promise<LivenessResult>;
 }

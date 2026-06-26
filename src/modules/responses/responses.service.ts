@@ -7,8 +7,7 @@ import { FraudFlag } from "../admin/fraudFlag.model";
 import { isEligibleForSurvey } from "../../utils/surveyHelpers";
 import { AppError } from "../../utils/errors";
 import config from "../../config";
-import * as billingService from "../billing/billing.service";
-import { User, IUser } from "../users/user.model";
+import { IUser } from "../users/user.model";
 
 const RAPID_SUBMIT_WINDOW_MS = 60 * 1000;
 const RAPID_SUBMIT_THRESHOLD = 3;
@@ -26,10 +25,6 @@ export const submitResponse = async (
   if (survey.billingLocked) throw new AppError("Survey is temporarily unavailable", 400);
   if (survey.responsesReceived >= survey.responsesNeeded) {
     throw new AppError("Survey has reached maximum responses", 400);
-  }
-
-  if (survey.billingModel === "PAYG" && !billingService.canAcceptPaygResponse(survey)) {
-    throw new AppError("Survey is temporarily unavailable", 400);
   }
 
   if (!isEligibleForSurvey(survey.targetAudience, user.ninVerified, user.livenessVerified)) {
@@ -73,22 +68,6 @@ export const submitResponse = async (
     status,
     rewardAmount: survey.payoutPerResponse,
   });
-
-  if (survey.billingModel === "PAYG" && autoApprove) {
-    const researcher = await User.findById(survey.researcherId);
-    if (!researcher) throw new AppError("Researcher not found", 404);
-    try {
-      await billingService.chargeForResponse(
-        survey.researcherId.toString(),
-        researcher.email,
-        survey,
-        response._id.toString()
-      );
-    } catch (err) {
-      await SurveyResponse.deleteOne({ _id: response._id });
-      throw err;
-    }
-  }
 
   const freshSurvey = await Survey.findById(surveyId);
   if (!freshSurvey) throw new AppError("Survey not found", 404);
@@ -181,17 +160,6 @@ export const updateResponseStatus = async (
   if (!wallet) throw new AppError("Wallet not found", 404);
 
   if (status === "APPROVED" && response.status === "PENDING") {
-    if (survey.billingModel === "PAYG") {
-      const researcher = await User.findById(survey.researcherId);
-      if (!researcher) throw new AppError("Researcher not found", 404);
-      await billingService.chargeForResponse(
-        survey.researcherId.toString(),
-        researcher.email,
-        survey,
-        responseId
-      );
-    }
-
     wallet.pendingBalance = Math.max(0, wallet.pendingBalance - response.rewardAmount);
     wallet.availableBalance += response.rewardAmount;
     wallet.lifetimeEarnings += response.rewardAmount;

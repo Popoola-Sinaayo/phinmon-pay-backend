@@ -3,7 +3,6 @@ import { Survey } from "../surveys/survey.model";
 import { Withdrawal } from "../wallets/withdrawal.model";
 import { Transaction } from "../wallets/transaction.model";
 import { paystackService } from "../../providers/paystack/paystack.service";
-import * as billingService from "../billing/billing.service";
 import { AppError } from "../../utils/errors";
 
 export const verifyPayment = async (reference: string) => {
@@ -24,8 +23,6 @@ export const verifyPayment = async (reference: string) => {
   payment.status = "SUCCESS";
   await payment.save();
 
-  const researcherId = payment.researcherId.toString();
-
   if (payment.purpose === "PREPAID") {
     const survey = await Survey.findById(payment.surveyId);
     if (survey) {
@@ -33,25 +30,6 @@ export const verifyPayment = async (reference: string) => {
       await survey.save();
     }
     return { payment, survey, alreadyVerified: false, purpose: payment.purpose };
-  }
-
-  if (payment.purpose === "CARD_SETUP") {
-    const cardResult = await billingService.handleCardSetupSuccess(
-      researcherId,
-      payment,
-      verification.authorization
-    );
-    return {
-      payment,
-      alreadyVerified: false,
-      purpose: payment.purpose,
-      ...cardResult,
-    };
-  }
-
-  if (payment.purpose === "DEBT_SETTLEMENT") {
-    await billingService.handleDebtSettlementSuccess(researcherId, payment);
-    return { payment, alreadyVerified: false, purpose: payment.purpose };
   }
 
   return { payment, alreadyVerified: false, purpose: payment.purpose };

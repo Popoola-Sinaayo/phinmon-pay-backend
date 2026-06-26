@@ -1,13 +1,65 @@
 import { v4 as uuidv4 } from "uuid";
-import { Survey, ISurvey, IQuestion } from "./survey.model";
+import { Survey, ISurvey, IQuestion, SurveyAudience } from "./survey.model";
 import { SurveyResponse } from "../responses/response.model";
 import { Payment } from "../payments/payment.model";
 import { paystackService } from "../../providers/paystack/paystack.service";
-import { calculateSurveyCost, calculatePerResponseCost, isEligibleForSurvey } from "../../utils/surveyHelpers";
+import {
+  computeSurveyPricing,
+  isVisibleSurvey,
+  normalizeQuestionType,
+} from "../../utils/surveyHelpers";
 import { AppError } from "../../utils/errors";
 import config from "../../config";
-import * as billingService from "../billing/billing.service";
-import { PaymentMethod } from "../billing/paymentMethod.model";
+
+const normalizeQuestions = (questions: IQuestion[]): IQuestion[] =>
+  questions.map((q) => ({
+    ...q,
+    questionId: q.questionId || uuidv4(),
+    type: normalizeQuestionType(q.type),
+  }));
+
+const applyPricing = (
+  surveyData: {
+    questions: IQuestion[];
+    responsesNeeded: number;
+    targetAudience: SurveyAudience;
+  }
+) => {
+  const pricing = computeSurveyPricing(
+    surveyData.questions,
+    surveyData.responsesNeeded,
+    surveyData.targetAudience
+  );
+
+  return {
+    ...pricing,
+    budget: pricing.budget,
+    platformFee: pricing.platformFeeAmount,
+    platformFeeAmount: pricing.platformFeeAmount,
+    platformFeeRate: pricing.platformFeeRate,
+    totalCost: pricing.totalCost,
+    payoutPerResponse: pricing.payoutPerResponse,
+    rewardPerResponseStandard: pricing.rewardPerResponseStandard,
+    rewardPerResponsePremium: pricing.rewardPerResponsePremium,
+    estimatedCompletionTimeSeconds: pricing.estimatedCompletionTimeSeconds,
+    estimatedCompletionTimeMinutes: pricing.estimatedCompletionTimeMinutes,
+    estimatedMinutes: pricing.estimatedMinutes,
+    highComplexity: pricing.highComplexity,
+  };
+};
+
+export const previewSurveyCost = (data: {
+  questions: IQuestion[];
+  responsesNeeded: number;
+  targetAudience: SurveyAudience;
+}) => {
+  const questions = normalizeQuestions(data.questions || []);
+  return applyPricing({
+    questions,
+    responsesNeeded: data.responsesNeeded,
+    targetAudience: data.targetAudience,
+  });
+};
 
 export const createSurvey = async (
   researcherId: string,
@@ -17,26 +69,22 @@ export const createSurvey = async (
     throw new AppError("ALL_USERS audience is not available in MVP", 400);
   }
 
-  const { budget, platformFee, totalCost } = calculateSurveyCost(
-    data.responsesNeeded || 0,
-    data.payoutPerResponse || 0
-  );
-
-  const questions = (data.questions || []).map((q) => ({
-    ...q,
-    questionId: q.questionId || uuidv4(),
-  }));
+  const targetAudience = (data.targetAudience || "ALL_VERIFIED") as SurveyAudience;
+  const responsesNeeded = data.responsesNeeded || 1;
+  const questions = normalizeQuestions(data.questions || []);
+  const pricing = applyPricing({ questions, responsesNeeded, targetAudience });
 
   const survey = await Survey.create({
-    ...data,
+    title: data.title,
+    description: data.description,
+    category: data.category,
     researcherId,
+    targetAudience,
+    responsesNeeded,
     questions,
-    budget,
-    platformFee,
-    totalCost,
-    spendingCap: data.spendingCap ?? totalCost,
-    billingModel: data.billingModel || "PREPAID",
+    billingModel: "PREPAID",
     status: "DRAFT",
+    ...pricing,
   });
 
   return survey;
@@ -51,20 +99,22 @@ export const updateSurvey = async (
   if (!survey) throw new AppError("Survey not found", 404);
   if (survey.status !== "DRAFT") throw new AppError("Only draft surveys can be edited", 400);
 
-  if (data.responsesNeeded !== undefined || data.payoutPerResponse !== undefined) {
-    const { budget, platformFee, totalCost } = calculateSurveyCost(
-      data.responsesNeeded ?? survey.responsesNeeded,
-      data.payoutPerResponse ?? survey.payoutPerResponse
-    );
-    data.budget = budget;
-    data.platformFee = platformFee;
-    data.totalCost = totalCost;
-    if (data.spendingCap === undefined && survey.billingModel === "PAYG") {
-      data.spendingCap = totalCost;
-    }
+  if (data.title !== undefined) survey.title = data.title;
+  if (data.description !== undefined) survey.description = data.description;
+  if (data.category !== undefined) survey.category = data.category;
+  if (data.targetAudience !== undefined) survey.targetAudience = data.targetAudience;
+  if (data.responsesNeeded !== undefined) survey.responsesNeeded = data.responsesNeeded;
+  if (data.questions !== undefined) {
+    survey.questions = normalizeQuestions(data.questions);
   }
 
-  Object.assign(survey, data);
+  const pricing = applyPricing({
+    questions: survey.questions,
+    responsesNeeded: survey.responsesNeeded,
+    targetAudience: survey.targetAudience,
+  });
+
+  Object.assign(survey, pricing);
   await survey.save();
   return survey;
 };
@@ -84,24 +134,24 @@ export const getSurveyById = async (surveyId: string, researcherId?: string) => 
 export const launchSurvey = async (
   researcherId: string,
   surveyId: string,
-  email: string,
-  options?: { billingModel?: "PREPAID" | "PAYG"; spendingCap?: number }
+  email: string
 ) => {
   const survey = await Survey.findOne({ _id: surveyId, researcherId });
   if (!survey) throw new AppError("Survey not found", 404);
   if (survey.status !== "DRAFT") throw new AppError("Survey cannot be launched", 400);
   if (!survey.questions.length) throw new AppError("Survey must have questions", 400);
-
-  if (options?.billingModel) survey.billingModel = options.billingModel;
-  if (options?.spendingCap !== undefined) survey.spendingCap = options.spendingCap;
-  if (survey.billingModel === "PAYG" && !survey.spendingCap) {
-    survey.spendingCap = survey.totalCost;
+  if (!survey.estimatedCompletionTimeSeconds) {
+    throw new AppError("Survey must have computed estimated time before launch", 400);
   }
+
+  const pricing = applyPricing({
+    questions: survey.questions,
+    responsesNeeded: survey.responsesNeeded,
+    targetAudience: survey.targetAudience,
+  });
+  Object.assign(survey, pricing);
+  survey.billingModel = "PREPAID";
   await survey.save();
-
-  if (survey.billingModel === "PAYG") {
-    return launchPaygSurvey(researcherId, survey, email);
-  }
 
   return launchPrepaidSurvey(researcherId, survey, email);
 };
@@ -145,54 +195,9 @@ const launchPrepaidSurvey = async (
   };
 };
 
-const launchPaygSurvey = async (researcherId: string, survey: ISurvey, email: string) => {
-  const account = await billingService.getOrCreateBillingAccount(researcherId);
-
-  if (account.outstandingDebt > 0) {
-    throw new AppError(
-      "Outstanding balance must be settled before launching a pay-as-you-go campaign",
-      402
-    );
-  }
-
-  const paymentMethod = account.defaultPaymentMethodId
-    ? await PaymentMethod.findById(account.defaultPaymentMethodId)
-    : await PaymentMethod.findOne({ researcherId, isDefault: true, isActive: true });
-
-  if (!paymentMethod) {
-    survey.status = "PENDING_PAYMENT";
-    await survey.save();
-
-    const setup = await billingService.initializeCardSetup(
-      researcherId,
-      email,
-      survey._id.toString()
-    );
-
-    return {
-      billingModel: "PAYG" as const,
-      requiresCardSetup: true,
-      authorizationUrl: setup.authorizationUrl,
-      reference: setup.reference,
-      amount: 100,
-      spendingCap: survey.spendingCap,
-    };
-  }
-
-  await billingService.activatePaygSurvey(survey);
-
-  return {
-    billingModel: "PAYG" as const,
-    requiresCardSetup: false,
-    survey,
-    spendingCap: survey.spendingCap,
-    perResponseCost: calculatePerResponseCost(survey.payoutPerResponse),
-  };
-};
-
 export const getAvailableSurveys = async (
   userId: string,
-  ninVerified: boolean,
+  _ninVerified: boolean,
   livenessVerified: boolean,
   filter?: string
 ) => {
@@ -205,9 +210,11 @@ export const getAvailableSurveys = async (
     $expr: { $lt: ["$responsesReceived", "$responsesNeeded"] },
   }).sort({ createdAt: -1 });
 
-  surveys = surveys.filter((s) =>
-    isEligibleForSurvey(s.targetAudience, ninVerified, livenessVerified)
-  );
+  surveys = surveys.filter((s) => isVisibleSurvey(s.targetAudience));
+
+  if (!livenessVerified) {
+    surveys = surveys.filter((s) => s.targetAudience !== "PREMIUM_ONLY");
+  }
 
   if (filter === "premium") {
     surveys = surveys.filter((s) => s.targetAudience === "PREMIUM_ONLY");
@@ -269,7 +276,6 @@ export const getResearcherDashboard = async (researcherId: string) => {
   const activeCampaigns = surveys.filter((s) => s.status === "ACTIVE").length;
   const responsesReceived = surveys.reduce((sum, s) => sum + s.responsesReceived, 0);
   const fundsSpent = surveys.reduce((sum, s) => {
-    if (s.billingModel === "PAYG") return sum + (s.amountSpent || 0);
     if (s.status !== "DRAFT") return sum + s.totalCost;
     return sum;
   }, 0);

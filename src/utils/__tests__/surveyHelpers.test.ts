@@ -1,11 +1,66 @@
-import { calculateSurveyCost, isEligibleForSurvey } from "../surveyHelpers";
+import {
+  calculateSurveyCost,
+  calculateSurveyTime,
+  calculateReward,
+  computeSurveyPricing,
+  isEligibleForSurvey,
+} from "../surveyHelpers";
+
+describe("calculateSurveyTime", () => {
+  it("sums time weights for question types", () => {
+    const { seconds, minutes } = calculateSurveyTime([
+      { type: "boolean", options: [] },
+      { type: "text_short", options: [] },
+      { type: "text_long", options: [] },
+    ]);
+    expect(seconds).toBe(2 + 15 + 45);
+    expect(minutes).toBe(2);
+  });
+
+  it("adds multiple choice option time", () => {
+    const { seconds } = calculateSurveyTime([
+      { type: "multiple_choice", options: ["a", "b", "c", "d"] },
+    ]);
+    expect(seconds).toBe(6 + 2 * 4);
+  });
+});
+
+describe("calculateReward", () => {
+  it("applies standard rate per minute", () => {
+    expect(calculateReward(300, "standard")).toBe(300);
+  });
+
+  it("applies premium rate at 2x", () => {
+    expect(calculateReward(300, "premium")).toBe(600);
+  });
+
+  it("enforces minimum standard reward", () => {
+    expect(calculateReward(30, "standard")).toBe(100);
+  });
+
+  it("enforces minimum premium reward", () => {
+    expect(calculateReward(30, "premium")).toBe(200);
+  });
+});
 
 describe("calculateSurveyCost", () => {
-  it("calculates budget, fee, and total", () => {
-    const result = calculateSurveyCost(100, 500);
-    expect(result.budget).toBe(50000);
-    expect(result.platformFee).toBe(7500);
-    expect(result.totalCost).toBe(57500);
+  it("calculates budget, fee, and total with 25% default fee", () => {
+    const result = calculateSurveyCost(300, 100, 25);
+    expect(result.budget).toBe(30000);
+    expect(result.platformFeeAmount).toBe(7500);
+    expect(result.totalCost).toBe(37500);
+  });
+});
+
+describe("computeSurveyPricing", () => {
+  it("matches spec example: 5 min survey, 100 responses", () => {
+    const questions = Array.from({ length: 10 }, () => ({
+      type: "boolean" as const,
+      options: [] as string[],
+    }));
+    const pricing = computeSurveyPricing(questions, 100, "ALL_VERIFIED");
+    expect(pricing.estimatedCompletionTimeMinutes).toBe(1);
+    expect(pricing.rewardPerResponseStandard).toBe(100);
   });
 });
 

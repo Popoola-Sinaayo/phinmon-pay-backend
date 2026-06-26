@@ -7,7 +7,8 @@
     "build": "rimraf dist && tsc",
     "start": "node dist/app.js",
     "test": "jest --passWithNoTests",
-    "seed:admin": "ts-node src/database/seedAdmin.ts"
+    "seed:admin": "ts-node src/database/seedAdmin.ts",
+    "backfill:nin-hash": "ts-node src/database/backfillNinHash.ts"
   },
   "dependencies": {
     "axios": "^1.9.0",

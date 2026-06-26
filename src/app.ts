@@ -5,6 +5,8 @@ import cookieParser from "cookie-parser";
 import config from "./config";
 import { connectToDB } from "./database/connection";
 import { errorHandler } from "./middleware/errorHandler";
+import { requestLogger } from "./middleware/requestLogger";
+import { logger } from "./utils/logger";
 
 import authRoutes from "./modules/auth/auth.routes";
 import usersRoutes from "./modules/users/users.routes";
@@ -13,7 +15,6 @@ import surveysRoutes from "./modules/surveys/surveys.routes";
 import responsesRoutes from "./modules/responses/responses.routes";
 import walletsRoutes from "./modules/wallets/wallets.routes";
 import paymentsRoutes from "./modules/payments/payments.routes";
-import billingRoutes from "./modules/billing/billing.routes";
 import adminRoutes from "./modules/admin/admin.routes";
 
 const app = express();
@@ -28,6 +29,7 @@ app.use(
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(requestLogger);
 
 app.get("/health", (_req, res) => {
   res.json({ success: true, status: "ok", service: "insightpay-api" });
@@ -40,7 +42,6 @@ app.use("/api/v1/surveys", surveysRoutes);
 app.use("/api/v1/responses", responsesRoutes);
 app.use("/api/v1/wallet", walletsRoutes);
 app.use("/api/v1/payments", paymentsRoutes);
-app.use("/api/v1/billing", billingRoutes);
 app.use("/api/v1/admin", adminRoutes);
 
 app.use(errorHandler);
@@ -48,11 +49,15 @@ app.use(errorHandler);
 connectToDB()
   .then(() => {
     app.listen(config().PORT, () => {
-      console.log(`Phinmon API running on port ${config().PORT}`);
+      logger.info(`Phinmon API running on port ${config().PORT}`, {
+        env: config().NODE_ENV,
+        ninProvider: config().NIN_PROVIDER,
+        livenessProvider: config().LIVENESS_PROVIDER,
+      });
     });
   })
   .catch((err) => {
-    console.error("Failed to start server:", err);
+    logger.error("Failed to start server", { error: (err as Error).message });
     process.exit(1);
   });
 

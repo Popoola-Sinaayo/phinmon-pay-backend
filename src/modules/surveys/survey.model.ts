@@ -11,6 +11,8 @@ export type SurveyStatus =
 export type BillingModel = "PREPAID" | "PAYG";
 export type QuestionType =
   | "text"
+  | "text_short"
+  | "text_long"
   | "single_choice"
   | "multiple_choice"
   | "number"
@@ -34,8 +36,12 @@ export interface ISurvey extends Document {
   targetAudience: SurveyAudience;
   budget: number;
   platformFee: number;
+  platformFeeAmount: number;
+  platformFeeRate: number;
   totalCost: number;
   payoutPerResponse: number;
+  rewardPerResponseStandard: number;
+  rewardPerResponsePremium: number;
   responsesNeeded: number;
   responsesReceived: number;
   status: SurveyStatus;
@@ -46,6 +52,9 @@ export interface ISurvey extends Document {
   billingLockReason?: string;
   questions: IQuestion[];
   estimatedMinutes?: number;
+  estimatedCompletionTimeSeconds: number;
+  estimatedCompletionTimeMinutes: number;
+  highComplexity: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -56,7 +65,16 @@ const questionSchema = new Schema<IQuestion>(
     questionText: { type: String, required: true },
     type: {
       type: String,
-      enum: ["text", "single_choice", "multiple_choice", "number", "rating", "boolean"],
+      enum: [
+        "text",
+        "text_short",
+        "text_long",
+        "single_choice",
+        "multiple_choice",
+        "number",
+        "rating",
+        "boolean",
+      ],
       required: true,
     },
     required: { type: Boolean, default: true },
@@ -79,8 +97,12 @@ const surveySchema = new Schema<ISurvey>(
     },
     budget: { type: Number, default: 0 },
     platformFee: { type: Number, default: 0 },
+    platformFeeAmount: { type: Number, default: 0 },
+    platformFeeRate: { type: Number, default: 25 },
     totalCost: { type: Number, default: 0 },
     payoutPerResponse: { type: Number, required: true },
+    rewardPerResponseStandard: { type: Number, default: 0 },
+    rewardPerResponsePremium: { type: Number, default: 0 },
     responsesNeeded: { type: Number, required: true },
     responsesReceived: { type: Number, default: 0 },
     status: {
@@ -98,7 +120,10 @@ const surveySchema = new Schema<ISurvey>(
     billingLocked: { type: Boolean, default: false },
     billingLockReason: { type: String },
     questions: [questionSchema],
-    estimatedMinutes: { type: Number, default: 10 },
+    estimatedMinutes: { type: Number, default: 1 },
+    estimatedCompletionTimeSeconds: { type: Number, default: 0 },
+    estimatedCompletionTimeMinutes: { type: Number, default: 1 },
+    highComplexity: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

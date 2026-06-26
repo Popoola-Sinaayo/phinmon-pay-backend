@@ -6,3 +6,8 @@ export const connectToDB = async (): Promise<void> => {
   await mongoose.connect(uri);
   console.log("Connected to MongoDB");
 };
+
+export const disconnectFromDB = async (): Promise<void> => {
+  await mongoose.disconnect();
+  console.log("Disconnected from MongoDB");
+};
