@@ -121,7 +121,7 @@ export const requestWithdrawal = async (
       await Transaction.findOneAndUpdate({ reference }, { status: "COMPLETED" });
     }
     await withdrawal.save();
-  } catch {
+  } catch (error) {
     withdrawal.status = "FAILED";
     wallet.availableBalance += amount;
     await Promise.all([
@@ -129,6 +129,7 @@ export const requestWithdrawal = async (
       wallet.save(),
       Transaction.findOneAndUpdate({ reference }, { status: "FAILED" }),
     ]);
+    console.log(error);
     throw new AppError("Withdrawal failed. Amount restored to wallet.", 500);
   }
 
