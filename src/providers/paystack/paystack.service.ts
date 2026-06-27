@@ -85,7 +85,6 @@ export class PaystackService {
         reference: params.reference,
         callback_url: params.callbackUrl,
         metadata: params.metadata,
-        channels: ["card"],
       },
       { headers: this.headers }
     );

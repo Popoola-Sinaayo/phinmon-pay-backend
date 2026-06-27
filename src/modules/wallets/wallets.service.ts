@@ -20,6 +20,18 @@ export const getTransactions = async (userId: string, limit = 50) => {
   return Transaction.find({ userId }).sort({ createdAt: -1 }).limit(limit);
 };
 
+export const resolveBankAccount = async (accountNumber: string, bankCode: string) => {
+  try {
+    const resolved = await paystackService.resolveAccount(accountNumber, bankCode);
+    return { accountName: resolved.accountName, accountNumber: resolved.accountNumber };
+  } catch {
+    throw new AppError(
+      "Could not verify account. Please check the account number and bank.",
+      422
+    );
+  }
+};
+
 export const addBankAccount = async (
   userId: string,
   data: { bankName: string; bankCode: string; accountNumber: string }

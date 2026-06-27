@@ -44,6 +44,25 @@ router.get(
 );
 
 router.post(
+  "/resolve-account",
+  requireAuth,
+  requireNinVerified,
+  validate(
+    Joi.object({
+      bankCode: Joi.string().required(),
+      accountNumber: Joi.string().length(10).pattern(/^\d+$/).required(),
+    })
+  ),
+  asyncHandler(async (req, res) => {
+    const result = await walletsService.resolveBankAccount(
+      req.body.accountNumber,
+      req.body.bankCode
+    );
+    res.json({ success: true, ...result });
+  })
+);
+
+router.post(
   "/bank-accounts",
   requireAuth,
   requireNinVerified,
