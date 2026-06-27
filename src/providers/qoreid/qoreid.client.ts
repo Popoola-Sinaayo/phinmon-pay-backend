@@ -73,7 +73,7 @@ class QoreIdClient {
     return config().QOREID_API_URL;
   }
 
-  /** HTTP Basic credentials — used only for the backend-to-backend session mint endpoint. */
+  /** HTTP Basic credentials  used only for the backend-to-backend session mint endpoint. */
   private get basicAuthHeader() {
     const cfg = config();
     const token = Buffer.from(`${cfg.QOREID_CLIENT_ID}:${cfg.QOREID_SECRET}`).toString("base64");

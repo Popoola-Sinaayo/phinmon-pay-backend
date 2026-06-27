@@ -29,6 +29,9 @@ export const requireAuth = async (req: Request, _res: Response, next: NextFuncti
     if (!user) {
       throw new AppError("User not found", 401);
     }
+    if (user.status === "SUSPENDED") {
+      throw new AppError("Your account has been suspended", 403, { code: "ACCOUNT_SUSPENDED" });
+    }
     req.user = user;
     next();
   } catch {

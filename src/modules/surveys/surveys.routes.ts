@@ -38,6 +38,8 @@ router.post(
       targetAudience: Joi.string()
         .valid("ALL_VERIFIED", "PREMIUM_ONLY")
         .default("ALL_VERIFIED"),
+      aiSpamFilterEnabled: Joi.boolean().default(false),
+      aiAnalyticsEnabled: Joi.boolean().default(false),
     })
   ),
   asyncHandler(async (req, res) => {
@@ -50,6 +52,9 @@ router.post(
       rewardPerResponsePremium: pricing.rewardPerResponsePremium,
       platformFeeRate: pricing.platformFeeRate,
       platformFeeAmount: pricing.platformFeeAmount,
+      aiSpamFilterCost: pricing.aiSpamFilterCost,
+      aiAnalyticsCost: pricing.aiAnalyticsCost,
+      aiAddOnsCost: pricing.aiAddOnsCost,
       totalCost: pricing.totalCost,
       highComplexity: pricing.highComplexity,
     });
@@ -67,6 +72,8 @@ router.post(
       category: Joi.string().optional(),
       targetAudience: Joi.string().valid("ALL_VERIFIED", "PREMIUM_ONLY").default("ALL_VERIFIED"),
       responsesNeeded: Joi.number().min(1).required(),
+      aiSpamFilterEnabled: Joi.boolean().default(false),
+      aiAnalyticsEnabled: Joi.boolean().default(false),
       questions: Joi.array().items(questionSchema).default([]),
     })
   ),
@@ -135,6 +142,8 @@ router.patch(
       category: Joi.string().optional(),
       targetAudience: Joi.string().valid("ALL_VERIFIED", "PREMIUM_ONLY").optional(),
       responsesNeeded: Joi.number().min(1).optional(),
+      aiSpamFilterEnabled: Joi.boolean().optional(),
+      aiAnalyticsEnabled: Joi.boolean().optional(),
       questions: Joi.array().items(questionSchema).optional(),
     })
   ),

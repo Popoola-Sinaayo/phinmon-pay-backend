@@ -10,6 +10,7 @@ import {
   PREMIUM_RATE_PER_MINUTE,
   STANDARD_RATE_PER_MINUTE,
   TIME_WEIGHTS,
+  calculateAiAddOnsCost,
 } from "../modules/surveys/pricing.constants";
 
 export type RewardTier = "standard" | "premium";
@@ -35,6 +36,11 @@ export interface SurveyPricingResult extends SurveyTimeResult, SurveyCostResult 
   estimatedMinutes: number;
   highComplexity: boolean;
   platformFee: number;
+  aiSpamFilterEnabled: boolean;
+  aiAnalyticsEnabled: boolean;
+  aiSpamFilterCost: number;
+  aiAnalyticsCost: number;
+  aiAddOnsCost: number;
 }
 
 /** Normalize legacy `text` to `text_short` */
@@ -101,7 +107,7 @@ export const calculateSurveyCost = (
   return { budget, platformFeeAmount, totalCost, platformFeeRate: rate };
 };
 
-/** @deprecated PAYG billing removed — kept for dormant billing module */
+/** @deprecated PAYG billing removed  kept for dormant billing module */
 export const calculatePerResponseCost = (rewardPerResponse: number, platformFeeRate?: number) => {
   const rate = platformFeeRate ?? getPlatformFeeRate();
   const platformFeeAmount = Math.round(rewardPerResponse * (rate / 100));
@@ -111,7 +117,8 @@ export const calculatePerResponseCost = (rewardPerResponse: number, platformFeeR
 export const computeSurveyPricing = (
   questions: Pick<IQuestion, "type" | "options">[],
   responsesNeeded: number,
-  targetAudience: SurveyAudience
+  targetAudience: SurveyAudience,
+  options?: { aiSpamFilterEnabled?: boolean; aiAnalyticsEnabled?: boolean }
 ): SurveyPricingResult => {
   const { seconds, minutes } = calculateSurveyTime(questions);
   const rewardPerResponseStandard = calculateReward(seconds, "standard");
@@ -123,6 +130,9 @@ export const computeSurveyPricing = (
 
   const cost = calculateSurveyCost(payoutPerResponse, responsesNeeded);
   const highComplexity = detectHighComplexity(questions);
+  const aiSpamFilterEnabled = options?.aiSpamFilterEnabled ?? false;
+  const aiAnalyticsEnabled = options?.aiAnalyticsEnabled ?? false;
+  const addOns = calculateAiAddOnsCost(responsesNeeded, aiSpamFilterEnabled, aiAnalyticsEnabled);
 
   return {
     seconds,
@@ -134,8 +144,16 @@ export const computeSurveyPricing = (
     rewardPerResponsePremium,
     payoutPerResponse,
     highComplexity,
+    aiSpamFilterEnabled,
+    aiAnalyticsEnabled,
+    aiSpamFilterCost: addOns.aiSpamFilterCost,
+    aiAnalyticsCost: addOns.aiAnalyticsCost,
+    aiAddOnsCost: addOns.aiAddOnsCost,
+    budget: cost.budget,
+    platformFeeAmount: cost.platformFeeAmount,
+    platformFeeRate: cost.platformFeeRate,
     platformFee: cost.platformFeeAmount,
-    ...cost,
+    totalCost: cost.totalCost + addOns.aiAddOnsCost,
   };
 };
 

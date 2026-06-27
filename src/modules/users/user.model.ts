@@ -1,7 +1,7 @@
 import mongoose, { Document, Schema } from "mongoose";
 
 export type UserRole = "respondent" | "researcher" | "admin";
-export type UserStatus = "PENDING_VERIFICATION" | "VERIFIED" | "PREMIUM";
+export type UserStatus = "PENDING_VERIFICATION" | "VERIFIED" | "PREMIUM" | "SUSPENDED";
 
 export interface IUser extends Document {
   name?: string;
@@ -10,6 +10,8 @@ export interface IUser extends Document {
   ninVerified: boolean;
   livenessVerified: boolean;
   status: UserStatus;
+  suspendedAt?: Date;
+  suspensionReason?: string;
   encryptedNin?: string;
   ninHash?: string;
   ninData?: string;
@@ -32,9 +34,11 @@ const userSchema = new Schema<IUser>(
     livenessVerified: { type: Boolean, default: false },
     status: {
       type: String,
-      enum: ["PENDING_VERIFICATION", "VERIFIED", "PREMIUM"],
+      enum: ["PENDING_VERIFICATION", "VERIFIED", "PREMIUM", "SUSPENDED"],
       default: "PENDING_VERIFICATION",
     },
+    suspendedAt: { type: Date },
+    suspensionReason: { type: String },
     encryptedNin: { type: String },
     ninHash: { type: String, unique: true, sparse: true },
     ninData: { type: String },

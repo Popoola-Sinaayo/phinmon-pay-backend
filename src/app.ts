@@ -16,6 +16,8 @@ import responsesRoutes from "./modules/responses/responses.routes";
 import walletsRoutes from "./modules/wallets/wallets.routes";
 import paymentsRoutes from "./modules/payments/payments.routes";
 import adminRoutes from "./modules/admin/admin.routes";
+import analyticsRoutes from "./modules/analytics/analytics.routes";
+import configRoutes from "./modules/config/config.routes";
 
 const app = express();
 
@@ -43,6 +45,8 @@ app.use("/api/v1/responses", responsesRoutes);
 app.use("/api/v1/wallet", walletsRoutes);
 app.use("/api/v1/payments", paymentsRoutes);
 app.use("/api/v1/admin", adminRoutes);
+app.use("/api/v1/analytics", analyticsRoutes);
+app.use("/api/v1/config", configRoutes);
 
 app.use(errorHandler);
 

@@ -245,7 +245,7 @@ export const chargeForResponse = async (
 
     await lockSurvey(survey, result.message || "Card charge failed");
 
-    throw new AppError("Payment failed — campaign paused until balance is settled", 402);
+    throw new AppError("Payment failed  campaign paused until balance is settled", 402);
   }
 
   charge.status = "SUCCESS";

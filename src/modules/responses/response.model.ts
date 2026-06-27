@@ -1,11 +1,10 @@
 import mongoose, { Document, Schema, Types } from "mongoose";
-import { QuestionType } from "../surveys/survey.model";
 
-export type ResponseStatus = "PENDING" | "APPROVED" | "REJECTED";
+export type ResponseStatus = "PENDING" | "APPROVED" | "REJECTED" | "FLAGGED";
 
 export interface IAnswer {
   questionId: string;
-  type: QuestionType;
+  type: string;
   value: unknown;
 }
 
@@ -15,6 +14,8 @@ export interface ISurveyResponse extends Document {
   answers: IAnswer[];
   status: ResponseStatus;
   rewardAmount: number;
+  spamSuspected: boolean;
+  flagReason?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -35,10 +36,12 @@ const surveyResponseSchema = new Schema<ISurveyResponse>(
     answers: [answerSchema],
     status: {
       type: String,
-      enum: ["PENDING", "APPROVED", "REJECTED"],
+      enum: ["PENDING", "APPROVED", "REJECTED", "FLAGGED"],
       default: "PENDING",
     },
     rewardAmount: { type: Number, required: true },
+    spamSuspected: { type: Boolean, default: false },
+    flagReason: { type: String },
   },
   { timestamps: true }
 );

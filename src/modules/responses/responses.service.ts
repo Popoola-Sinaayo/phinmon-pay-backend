@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import { Survey } from "../surveys/survey.model";
 import { SurveyResponse } from "./response.model";
+import { ResponseFlag } from "./responseFlag.model";
 import { Wallet } from "../wallets/wallet.model";
 import { Transaction } from "../wallets/transaction.model";
 import { FraudFlag } from "../admin/fraudFlag.model";
@@ -8,15 +9,50 @@ import { isEligibleForSurvey } from "../../utils/surveyHelpers";
 import { AppError } from "../../utils/errors";
 import config from "../../config";
 import { IUser } from "../users/user.model";
+import { detectSpamAnswers } from "./spam.service";
+import { maybeSuspendUser } from "./suspension.service";
 
 const RAPID_SUBMIT_WINDOW_MS = 60 * 1000;
 const RAPID_SUBMIT_THRESHOLD = 3;
+
+const clawbackReward = async (
+  userId: string,
+  rewardAmount: number,
+  previousStatus: string,
+  surveyTitle: string,
+  surveyId: string,
+  responseId: string
+) => {
+  const wallet = await Wallet.findOne({ userId });
+  if (!wallet) return;
+
+  if (previousStatus === "APPROVED") {
+    wallet.availableBalance = Math.max(0, wallet.availableBalance - rewardAmount);
+    wallet.lifetimeEarnings = Math.max(0, wallet.lifetimeEarnings - rewardAmount);
+    await Transaction.create({
+      userId,
+      type: "ADJUSTMENT",
+      amount: -rewardAmount,
+      reference: `CLAW-${uuidv4()}`,
+      status: "COMPLETED",
+      description: `Clawback for flagged response: ${surveyTitle}`,
+      metadata: { surveyId, responseId },
+    });
+  } else if (previousStatus === "PENDING") {
+    wallet.pendingBalance = Math.max(0, wallet.pendingBalance - rewardAmount);
+  }
+
+  await wallet.save();
+};
 
 export const submitResponse = async (
   user: IUser,
   surveyId: string,
   answers: Array<{ questionId: string; type: string; value: unknown }>
 ) => {
+  if (user.status === "SUSPENDED") {
+    throw new AppError("Your account has been suspended", 403, { code: "ACCOUNT_SUSPENDED" });
+  }
   if (!user.ninVerified) throw new AppError("NIN verification required", 403);
 
   const survey = await Survey.findById(surveyId);
@@ -58,7 +94,22 @@ export const submitResponse = async (
     throw new AppError("Too many submissions. Please try again later.", 429);
   }
 
-  const autoApprove = config().AUTO_APPROVE_RESPONSES;
+  let spamSuspected = false;
+  let forcePending = false;
+
+  if (survey.aiSpamFilterEnabled && config().FEATURE_AI_SPAM_FILTER) {
+    try {
+      const spam = await detectSpamAnswers(survey.questions, answers);
+      if (spam.isSpam) {
+        spamSuspected = true;
+        forcePending = true;
+      }
+    } catch {
+      // Fail open
+    }
+  }
+
+  const autoApprove = config().AUTO_APPROVE_RESPONSES && !forcePending;
   const status = autoApprove ? "APPROVED" : "PENDING";
 
   const response = await SurveyResponse.create({
@@ -67,7 +118,17 @@ export const submitResponse = async (
     answers,
     status,
     rewardAmount: survey.payoutPerResponse,
+    spamSuspected,
   });
+
+  if (spamSuspected) {
+    await FraudFlag.create({
+      userId: user._id,
+      reason: "Possible spam response (AI)",
+      severity: "medium",
+      metadata: { surveyId, responseId: response._id },
+    });
+  }
 
   const freshSurvey = await Survey.findById(surveyId);
   if (!freshSurvey) throw new AppError("Survey not found", 404);
@@ -109,7 +170,7 @@ export const submitResponse = async (
   }
   await wallet.save();
 
-  return { response, rewardAmount: survey.payoutPerResponse, status };
+  return { response, rewardAmount: survey.payoutPerResponse, status, spamSuspected };
 };
 
 export const getSurveyResponses = async (researcherId: string, surveyId: string) => {
@@ -155,6 +216,9 @@ export const updateResponseStatus = async (
   if (!survey) throw new AppError("Forbidden", 403);
 
   if (response.status === status) return response;
+  if (response.status === "FLAGGED") {
+    throw new AppError("Response has been flagged and cannot be updated", 400);
+  }
 
   const wallet = await Wallet.findOne({ userId: response.userId });
   if (!wallet) throw new AppError("Wallet not found", 404);
@@ -179,4 +243,54 @@ export const updateResponseStatus = async (
   response.status = status;
   await Promise.all([response.save(), wallet.save()]);
   return response;
+};
+
+export const flagResponseInvalid = async (
+  researcherId: string,
+  responseId: string,
+  reason?: string
+) => {
+  const response = await SurveyResponse.findById(responseId);
+  if (!response) throw new AppError("Response not found", 404);
+
+  const survey = await Survey.findOne({ _id: response.surveyId, researcherId });
+  if (!survey) throw new AppError("Forbidden", 403);
+
+  if (response.status === "FLAGGED") {
+    return { response, suspended: false };
+  }
+
+  const previousStatus = response.status;
+
+  await ResponseFlag.findOneAndUpdate(
+    { responseId: response._id, researcherId },
+    {
+      responseId: response._id,
+      surveyId: survey._id,
+      researcherId,
+      userId: response.userId,
+      reason,
+    },
+    { upsert: true, new: true }
+  );
+
+  await clawbackReward(
+    response.userId.toString(),
+    response.rewardAmount,
+    previousStatus,
+    survey.title,
+    survey._id.toString(),
+    response._id.toString()
+  );
+
+  response.status = "FLAGGED";
+  response.flagReason = reason || "Flagged as invalid by researcher";
+  await response.save();
+
+  const suspended = await maybeSuspendUser(
+    response.userId.toString(),
+    "Multiple researchers flagged responses as invalid"
+  );
+
+  return { response, suspended };
 };

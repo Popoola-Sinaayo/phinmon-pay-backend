@@ -33,7 +33,9 @@ router.patch(
       role: Joi.string().valid("respondent", "researcher", "admin").optional(),
       ninVerified: Joi.boolean().optional(),
       livenessVerified: Joi.boolean().optional(),
-      status: Joi.string().valid("PENDING_VERIFICATION", "VERIFIED", "PREMIUM").optional(),
+      status: Joi.string()
+        .valid("PENDING_VERIFICATION", "VERIFIED", "PREMIUM", "SUSPENDED")
+        .optional(),
       name: Joi.string().optional(),
     })
   ),

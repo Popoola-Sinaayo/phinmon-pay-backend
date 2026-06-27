@@ -107,7 +107,7 @@ export const verifyNIN = async (userId: string, nin: string, ip?: string) => {
   const ninHash = hashValue(nin);
 
   if (user.ninVerified && user.ninHash === ninHash) {
-    log.info("NIN already verified for this user — returning cached result, no API call", {
+    log.info("NIN already verified for this user  returning cached result, no API call", {
       userId,
       nin: maskValue(nin),
     });
@@ -180,7 +180,7 @@ export const verifyNIN = async (userId: string, nin: string, ip?: string) => {
     user.ninLockedUntil = new Date(Date.now() + NIN_RETRY_COOLDOWN_HOURS * 60 * 60 * 1000);
     await user.save();
 
-    log.warn("NIN mismatch — applying cooldown", {
+    log.warn("NIN mismatch  applying cooldown", {
       userId,
       nameMatches,
       dobMatches,
@@ -329,7 +329,7 @@ export const completeLiveness = async (userId: string, sessionId: string) => {
   user.status = "PREMIUM";
   await user.save();
 
-  log.info("NIN liveness verification complete — user is now PREMIUM", { userId });
+  log.info("NIN liveness verification complete  user is now PREMIUM", { userId });
 
   return {
     livenessVerified: true,

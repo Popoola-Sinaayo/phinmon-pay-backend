@@ -62,6 +62,18 @@ describe("computeSurveyPricing", () => {
     expect(pricing.estimatedCompletionTimeMinutes).toBe(1);
     expect(pricing.rewardPerResponseStandard).toBe(100);
   });
+
+  it("includes AI add-on costs in total", () => {
+    const questions = [{ type: "boolean" as const, options: [] as string[] }];
+    const pricing = computeSurveyPricing(questions, 100, "ALL_VERIFIED", {
+      aiSpamFilterEnabled: true,
+      aiAnalyticsEnabled: true,
+    });
+    expect(pricing.aiSpamFilterCost).toBe(2000);
+    expect(pricing.aiAnalyticsCost).toBe(5000);
+    expect(pricing.aiAddOnsCost).toBe(7000);
+    expect(pricing.totalCost).toBe(pricing.budget + pricing.platformFeeAmount + 7000);
+  });
 });
 
 describe("isEligibleForSurvey", () => {

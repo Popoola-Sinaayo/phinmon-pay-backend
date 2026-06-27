@@ -55,6 +55,11 @@ export interface ISurvey extends Document {
   estimatedCompletionTimeSeconds: number;
   estimatedCompletionTimeMinutes: number;
   highComplexity: boolean;
+  aiSpamFilterEnabled: boolean;
+  aiAnalyticsEnabled: boolean;
+  aiAddOnsCost: number;
+  aiSpamFilterCost: number;
+  aiAnalyticsCost: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -124,6 +129,11 @@ const surveySchema = new Schema<ISurvey>(
     estimatedCompletionTimeSeconds: { type: Number, default: 0 },
     estimatedCompletionTimeMinutes: { type: Number, default: 1 },
     highComplexity: { type: Boolean, default: false },
+    aiSpamFilterEnabled: { type: Boolean, default: false },
+    aiAnalyticsEnabled: { type: Boolean, default: false },
+    aiAddOnsCost: { type: Number, default: 0 },
+    aiSpamFilterCost: { type: Number, default: 0 },
+    aiAnalyticsCost: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

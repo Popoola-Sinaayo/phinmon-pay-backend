@@ -76,4 +76,19 @@ router.patch(
   })
 );
 
+router.post(
+  "/:id/flag",
+  requireAuth,
+  requireRole("researcher", "admin"),
+  validate(Joi.object({ reason: Joi.string().max(500).optional() })),
+  asyncHandler(async (req, res) => {
+    const result = await responsesService.flagResponseInvalid(
+      req.user!._id.toString(),
+      String(req.params.id),
+      req.body.reason
+    );
+    res.json({ success: true, ...result });
+  })
+);
+
 export default router;

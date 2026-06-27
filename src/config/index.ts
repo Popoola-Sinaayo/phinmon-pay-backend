@@ -34,6 +34,13 @@ const config = () => ({
   AUTO_APPROVE_RESPONSES: process.env.AUTO_APPROVE_RESPONSES !== "false",
   FEATURE_TIME_BASED_PRICING: process.env.FEATURE_TIME_BASED_PRICING !== "false",
   FEATURE_PREMIUM_MULTIPLIER: process.env.FEATURE_PREMIUM_MULTIPLIER !== "false",
+  DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY || "",
+  DEEPSEEK_API_URL: process.env.DEEPSEEK_API_URL || "https://api.deepseek.com",
+  DEEPSEEK_MODEL: process.env.DEEPSEEK_MODEL || "deepseek-chat",
+  FEATURE_AI_SPAM_FILTER: process.env.FEATURE_AI_SPAM_FILTER !== "false",
+  FEATURE_AI_ANALYTICS: process.env.FEATURE_AI_ANALYTICS !== "false",
+  AI_SPAM_FILTER_COST_PER_RESPONSE: parseFloat(process.env.AI_SPAM_FILTER_COST_PER_RESPONSE || "20"),
+  AI_ANALYTICS_COST: parseFloat(process.env.AI_ANALYTICS_COST || "5000"),
 });
 
 export type AppConfig = ReturnType<typeof config>;

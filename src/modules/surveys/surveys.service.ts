@@ -23,12 +23,18 @@ const applyPricing = (
     questions: IQuestion[];
     responsesNeeded: number;
     targetAudience: SurveyAudience;
+    aiSpamFilterEnabled?: boolean;
+    aiAnalyticsEnabled?: boolean;
   }
 ) => {
   const pricing = computeSurveyPricing(
     surveyData.questions,
     surveyData.responsesNeeded,
-    surveyData.targetAudience
+    surveyData.targetAudience,
+    {
+      aiSpamFilterEnabled: surveyData.aiSpamFilterEnabled ?? false,
+      aiAnalyticsEnabled: surveyData.aiAnalyticsEnabled ?? false,
+    }
   );
 
   return {
@@ -45,6 +51,11 @@ const applyPricing = (
     estimatedCompletionTimeMinutes: pricing.estimatedCompletionTimeMinutes,
     estimatedMinutes: pricing.estimatedMinutes,
     highComplexity: pricing.highComplexity,
+    aiSpamFilterEnabled: pricing.aiSpamFilterEnabled,
+    aiAnalyticsEnabled: pricing.aiAnalyticsEnabled,
+    aiAddOnsCost: pricing.aiAddOnsCost,
+    aiSpamFilterCost: pricing.aiSpamFilterCost,
+    aiAnalyticsCost: pricing.aiAnalyticsCost,
   };
 };
 
@@ -52,12 +63,16 @@ export const previewSurveyCost = (data: {
   questions: IQuestion[];
   responsesNeeded: number;
   targetAudience: SurveyAudience;
+  aiSpamFilterEnabled?: boolean;
+  aiAnalyticsEnabled?: boolean;
 }) => {
   const questions = normalizeQuestions(data.questions || []);
   return applyPricing({
     questions,
     responsesNeeded: data.responsesNeeded,
     targetAudience: data.targetAudience,
+    aiSpamFilterEnabled: data.aiSpamFilterEnabled,
+    aiAnalyticsEnabled: data.aiAnalyticsEnabled,
   });
 };
 
@@ -72,7 +87,13 @@ export const createSurvey = async (
   const targetAudience = (data.targetAudience || "ALL_VERIFIED") as SurveyAudience;
   const responsesNeeded = data.responsesNeeded || 1;
   const questions = normalizeQuestions(data.questions || []);
-  const pricing = applyPricing({ questions, responsesNeeded, targetAudience });
+  const pricing = applyPricing({
+    questions,
+    responsesNeeded,
+    targetAudience,
+    aiSpamFilterEnabled: data.aiSpamFilterEnabled ?? false,
+    aiAnalyticsEnabled: data.aiAnalyticsEnabled ?? false,
+  });
 
   const survey = await Survey.create({
     title: data.title,
@@ -104,6 +125,8 @@ export const updateSurvey = async (
   if (data.category !== undefined) survey.category = data.category;
   if (data.targetAudience !== undefined) survey.targetAudience = data.targetAudience;
   if (data.responsesNeeded !== undefined) survey.responsesNeeded = data.responsesNeeded;
+  if (data.aiSpamFilterEnabled !== undefined) survey.aiSpamFilterEnabled = data.aiSpamFilterEnabled;
+  if (data.aiAnalyticsEnabled !== undefined) survey.aiAnalyticsEnabled = data.aiAnalyticsEnabled;
   if (data.questions !== undefined) {
     survey.questions = normalizeQuestions(data.questions);
   }
@@ -112,6 +135,8 @@ export const updateSurvey = async (
     questions: survey.questions,
     responsesNeeded: survey.responsesNeeded,
     targetAudience: survey.targetAudience,
+    aiSpamFilterEnabled: survey.aiSpamFilterEnabled,
+    aiAnalyticsEnabled: survey.aiAnalyticsEnabled,
   });
 
   Object.assign(survey, pricing);
@@ -148,6 +173,8 @@ export const launchSurvey = async (
     questions: survey.questions,
     responsesNeeded: survey.responsesNeeded,
     targetAudience: survey.targetAudience,
+    aiSpamFilterEnabled: survey.aiSpamFilterEnabled,
+    aiAnalyticsEnabled: survey.aiAnalyticsEnabled,
   });
   Object.assign(survey, pricing);
   survey.billingModel = "PREPAID";
