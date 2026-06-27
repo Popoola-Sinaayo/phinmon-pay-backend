@@ -32,6 +32,18 @@ export const verifyPayment = async (reference: string) => {
     return { payment, survey, alreadyVerified: false, purpose: payment.purpose };
   }
 
+  if (payment.purpose === "AI_ANALYTICS_ADDON") {
+    const survey = await Survey.findById(payment.surveyId);
+    if (survey && !survey.aiAnalyticsEnabled) {
+      survey.aiAnalyticsEnabled = true;
+      survey.aiAnalyticsCost = payment.amount;
+      survey.aiAddOnsCost = (survey.aiAddOnsCost || 0) + payment.amount;
+      survey.totalCost = (survey.totalCost || 0) + payment.amount;
+      await survey.save();
+    }
+    return { payment, survey, alreadyVerified: false, purpose: payment.purpose };
+  }
+
   return { payment, alreadyVerified: false, purpose: payment.purpose };
 };
 

@@ -95,7 +95,7 @@ router.post(
   requireNinVerified,
   validate(
     Joi.object({
-      amount: Joi.number().min(1000).required(),
+      amount: Joi.number().min(100).required(),
       bankId: Joi.string().required(),
     })
   ),

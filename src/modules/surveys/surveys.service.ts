@@ -222,6 +222,57 @@ const launchPrepaidSurvey = async (
   };
 };
 
+export const purchaseAnalyticsAddon = async (
+  researcherId: string,
+  surveyId: string,
+  email: string
+) => {
+  const survey = await Survey.findOne({ _id: surveyId, researcherId });
+  if (!survey) throw new AppError("Survey not found", 404);
+  if (survey.aiAnalyticsEnabled) {
+    throw new AppError("AI analytics is already enabled for this survey", 400);
+  }
+
+  const cfg = config();
+  if (!cfg.FEATURE_AI_ANALYTICS) {
+    throw new AppError("AI analytics is not available on this platform", 503);
+  }
+
+  const amount = cfg.AI_ANALYTICS_COST;
+  const reference = `IPY-AIA-${uuidv4()}`;
+  const payment = await Payment.create({
+    surveyId: survey._id,
+    researcherId,
+    amount,
+    reference,
+    status: "PENDING",
+    purpose: "AI_ANALYTICS_ADDON",
+    provider: "paystack",
+  });
+
+  const init = await paystackService.initializeTransaction({
+    email,
+    amount,
+    reference,
+    callbackUrl: `${cfg.FRONTEND_URL}/researcher/campaigns/payment/callback`,
+    metadata: {
+      surveyId: survey._id.toString(),
+      paymentId: payment._id.toString(),
+      purpose: "AI_ANALYTICS_ADDON",
+    },
+  });
+
+  payment.paystackAccessCode = init.accessCode;
+  payment.authorizationUrl = init.authorizationUrl;
+  await payment.save();
+
+  return {
+    authorizationUrl: init.authorizationUrl,
+    reference: init.reference,
+    amount,
+  };
+};
+
 export const getAvailableSurveys = async (
   userId: string,
   _ninVerified: boolean,

@@ -1,7 +1,7 @@
 import mongoose, { Document, Schema, Types } from "mongoose";
 
 export type PaymentStatus = "PENDING" | "SUCCESS" | "FAILED";
-export type PaymentPurpose = "PREPAID" | "CARD_SETUP" | "DEBT_SETTLEMENT";
+export type PaymentPurpose = "PREPAID" | "CARD_SETUP" | "DEBT_SETTLEMENT" | "AI_ANALYTICS_ADDON";
 
 export interface IPayment extends Document {
   surveyId?: Types.ObjectId;
@@ -31,7 +31,7 @@ const paymentSchema = new Schema<IPayment>(
     },
     purpose: {
       type: String,
-      enum: ["PREPAID", "CARD_SETUP", "DEBT_SETTLEMENT"],
+      enum: ["PREPAID", "CARD_SETUP", "DEBT_SETTLEMENT", "AI_ANALYTICS_ADDON"],
       default: "PREPAID",
     },
     provider: { type: String, default: "paystack" },

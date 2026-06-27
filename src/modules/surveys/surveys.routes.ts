@@ -172,6 +172,21 @@ router.post(
   })
 );
 
+router.post(
+  "/:id/enable-analytics",
+  requireAuth,
+  requireRole("researcher", "admin"),
+  validate(Joi.object({})),
+  asyncHandler(async (req, res) => {
+    const result = await surveysService.purchaseAnalyticsAddon(
+      req.user!._id.toString(),
+      String(req.params.id),
+      req.user!.email
+    );
+    res.json({ success: true, ...result });
+  })
+);
+
 router.get(
   "/:id/export",
   requireAuth,

@@ -30,7 +30,7 @@ const config = () => ({
   FEATURE_LIVENESS: process.env.FEATURE_LIVENESS === "true",
   LIVENESS_PROVIDER: process.env.LIVENESS_PROVIDER || "qoreid",
   PLATFORM_FEE_PERCENT: parseFloat(process.env.PLATFORM_FEE_PERCENT || "25"),
-  MIN_WITHDRAWAL_AMOUNT: parseFloat(process.env.MIN_WITHDRAWAL_AMOUNT || "1000"),
+  MIN_WITHDRAWAL_AMOUNT: parseFloat(process.env.MIN_WITHDRAWAL_AMOUNT || "100"),
   AUTO_APPROVE_RESPONSES: process.env.AUTO_APPROVE_RESPONSES !== "false",
   FEATURE_TIME_BASED_PRICING: process.env.FEATURE_TIME_BASED_PRICING !== "false",
   FEATURE_PREMIUM_MULTIPLIER: process.env.FEATURE_PREMIUM_MULTIPLIER !== "false",
