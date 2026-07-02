@@ -6,7 +6,8 @@ import { OtpCode } from "./otp.model";
 import { User } from "../users/user.model";
 import { Wallet } from "../wallets/wallet.model";
 import { getEmailProvider } from "../../providers/email";
-import { otpEmailTemplate, welcomeEmailTemplate, sanitizeUser } from "../../utils/helpers";
+import { otpEmailTemplate, welcomeEmailTemplate } from "../../emails/templates";
+import { sanitizeUser } from "../../utils/helpers";
 import { AppError } from "../../utils/errors";
 
 const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString();

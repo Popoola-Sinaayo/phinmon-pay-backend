@@ -1,6 +1,7 @@
 import { Payment } from "./payment.model";
 import { Survey } from "../surveys/survey.model";
 import { syncWithdrawalByReference } from "../wallets/withdrawalSync";
+import { notifyEligibleUsersOfNewSurvey } from "../notifications/surveyNotifications.service";
 import { paystackService } from "../../providers/paystack/paystack.service";
 import { AppError } from "../../utils/errors";
 import { createLogger } from "../../utils/logger";
@@ -27,9 +28,15 @@ export const verifyPayment = async (reference: string) => {
 
   if (payment.purpose === "PREPAID") {
     const survey = await Survey.findById(payment.surveyId);
-    if (survey) {
+    if (survey && survey.status === "PENDING_PAYMENT") {
       survey.status = "ACTIVE";
       await survey.save();
+      void notifyEligibleUsersOfNewSurvey(survey._id.toString()).catch((err) => {
+        log.error("Failed to send new survey notifications", {
+          surveyId: survey._id.toString(),
+          message: (err as Error).message,
+        });
+      });
     }
     return { payment, survey, alreadyVerified: false, purpose: payment.purpose };
   }
