@@ -1,5 +1,8 @@
 import axios from "axios";
 import config from "../../config";
+import { createLogger } from "../../utils/logger";
+
+const log = createLogger("Paystack");
 
 export interface PaystackInitResult {
   authorizationUrl: string;
@@ -41,6 +44,12 @@ export interface TransferRecipientResult {
 export interface TransferResult {
   transferCode: string;
   status: string;
+}
+
+export interface TransferVerifyResult {
+  status: string;
+  reference: string;
+  amount: number;
 }
 
 export class PaystackService {
@@ -236,6 +245,133 @@ export class PaystackService {
       transferCode: response.data.data.transfer_code,
       status: response.data.data.status,
     };
+  }
+
+  async verifyTransfer(reference: string): Promise<TransferVerifyResult | null> {
+    if (!this.isConfigured()) {
+      log.debug("verifyTransfer mock — Paystack not configured", { reference });
+      return { status: "success", reference, amount: 0 };
+    }
+
+    const url = `${this.baseUrl}/transfer/verify/${encodeURIComponent(reference)}`;
+    log.info("Paystack verifyTransfer request", { reference, url });
+
+    try {
+      const response = await axios.get(url, { headers: this.headers });
+
+      log.info("Paystack verifyTransfer response", {
+        reference,
+        httpStatus: response.status,
+        paystackStatus: response.data?.status,
+        message: response.data?.message,
+        dataStatus: response.data?.data?.status,
+        transferCode: response.data?.data?.transfer_code,
+        dataReference: response.data?.data?.reference,
+      });
+
+      const data = response.data?.data;
+      if (!data) {
+        log.warn("verifyTransfer empty data payload", { reference, body: response.data });
+        return null;
+      }
+
+      return {
+        status: String(data.status || "").toLowerCase(),
+        reference: data.reference || reference,
+        amount: (data.amount || 0) / 100,
+      };
+    } catch (err) {
+      const axiosErr = err as {
+        response?: { status?: number; data?: unknown };
+        message?: string;
+      };
+      const httpStatus = axiosErr.response?.status;
+      log.warn("verifyTransfer failed", {
+        reference,
+        httpStatus,
+        message: axiosErr.message,
+        responseData: axiosErr.response?.data,
+      });
+      if (httpStatus === 404) return null;
+      throw err;
+    }
+  }
+
+  async fetchTransfer(transferCode: string): Promise<TransferVerifyResult | null> {
+    if (!this.isConfigured()) {
+      log.debug("fetchTransfer mock — Paystack not configured", { transferCode });
+      return { status: "success", reference: transferCode, amount: 0 };
+    }
+
+    const url = `${this.baseUrl}/transfer/${encodeURIComponent(transferCode)}`;
+    log.info("Paystack fetchTransfer request", { transferCode, url });
+
+    try {
+      const response = await axios.get(url, { headers: this.headers });
+
+      log.info("Paystack fetchTransfer response", {
+        transferCode,
+        httpStatus: response.status,
+        paystackStatus: response.data?.status,
+        message: response.data?.message,
+        dataStatus: response.data?.data?.status,
+        dataReference: response.data?.data?.reference,
+      });
+
+      const data = response.data?.data;
+      if (!data) {
+        log.warn("fetchTransfer empty data payload", { transferCode, body: response.data });
+        return null;
+      }
+
+      return {
+        status: String(data.status || "").toLowerCase(),
+        reference: data.reference || transferCode,
+        amount: (data.amount || 0) / 100,
+      };
+    } catch (err) {
+      const axiosErr = err as {
+        response?: { status?: number; data?: unknown };
+        message?: string;
+      };
+      const httpStatus = axiosErr.response?.status;
+      log.warn("fetchTransfer failed", {
+        transferCode,
+        httpStatus,
+        message: axiosErr.message,
+        responseData: axiosErr.response?.data,
+      });
+      if (httpStatus === 404) return null;
+      throw err;
+    }
+  }
+
+  /** Resolve transfer status via reference, falling back to transfer code. */
+  async resolveTransferStatus(
+    reference: string,
+    transferCode?: string
+  ): Promise<TransferVerifyResult | null> {
+    log.info("resolveTransferStatus", { reference, transferCode: transferCode || null });
+
+    const byReference = await this.verifyTransfer(reference);
+    if (byReference?.status) {
+      log.info("Resolved via reference", { reference, status: byReference.status });
+      return byReference;
+    }
+
+    if (transferCode) {
+      log.info("Reference verify empty — trying transfer code", { reference, transferCode });
+      const byCode = await this.fetchTransfer(transferCode);
+      if (byCode?.status) {
+        log.info("Resolved via transfer code", { transferCode, status: byCode.status });
+      } else {
+        log.warn("Could not resolve via reference or transfer code", { reference, transferCode });
+      }
+      return byCode;
+    }
+
+    log.warn("Could not resolve transfer — no transfer code fallback", { reference });
+    return null;
   }
 
   verifyWebhookSignature(payload: string | Buffer, signature: string): boolean {

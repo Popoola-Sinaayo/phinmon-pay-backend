@@ -52,4 +52,29 @@ router.patch(
   })
 );
 
+const pinSchema = Joi.object({
+  pin: Joi.string().pattern(/^\d{4,6}$/).required(),
+  confirmPin: Joi.string().pattern(/^\d{4,6}$/).required(),
+  currentPin: Joi.string().pattern(/^\d{4,6}$/).optional(),
+});
+
+router.get(
+  "/withdrawal-pin/status",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const status = await usersService.getWithdrawalPinStatus(req.user!._id.toString());
+    res.json({ success: true, ...status });
+  })
+);
+
+router.post(
+  "/withdrawal-pin",
+  requireAuth,
+  validate(pinSchema),
+  asyncHandler(async (req, res) => {
+    const result = await usersService.setWithdrawalPin(req.user!._id.toString(), req.body);
+    res.json({ success: true, ...result });
+  })
+);
+
 export default router;

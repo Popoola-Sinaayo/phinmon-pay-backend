@@ -17,6 +17,7 @@ export interface IUser extends Document {
   ninData?: string;
   ninLockedUntil?: Date;
   ninMismatchCount?: number;
+  withdrawalPinHash?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -44,6 +45,7 @@ const userSchema = new Schema<IUser>(
     ninData: { type: String },
     ninLockedUntil: { type: Date },
     ninMismatchCount: { type: Number, default: 0 },
+    withdrawalPinHash: { type: String, select: false },
   },
   { timestamps: true }
 );

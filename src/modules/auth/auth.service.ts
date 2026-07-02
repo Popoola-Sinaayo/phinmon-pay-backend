@@ -59,7 +59,7 @@ export const verifyOtp = async (email: string, code: string) => {
   otpDoc.used = true;
   await otpDoc.save();
 
-  const user = await User.findOne({ email: normalizedEmail });
+  const user = await User.findOne({ email: normalizedEmail }).select("+withdrawalPinHash");
   if (!user) throw new AppError("User not found", 404);
 
   const token = jwt.sign({ id: user._id, email: user.email }, config().JWT_SECRET, {
@@ -79,7 +79,7 @@ export const setAuthCookie = (res: Response, token: string) => {
 };
 
 export const getMe = async (userId: string) => {
-  const user = await User.findById(userId);
+  const user = await User.findById(userId).select("+withdrawalPinHash");
   if (!user) throw new AppError("User not found", 404);
   return sanitizeUser(user);
 };

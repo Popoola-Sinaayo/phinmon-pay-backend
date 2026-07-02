@@ -8,6 +8,7 @@ export const sanitizeUser = (user: IUser) => ({
   ninVerified: user.ninVerified,
   livenessVerified: user.livenessVerified,
   status: user.status,
+  withdrawalPinSet: Boolean(user.withdrawalPinHash),
   createdAt: user.createdAt,
 });
 

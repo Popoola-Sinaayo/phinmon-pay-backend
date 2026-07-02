@@ -2,6 +2,10 @@ import { Profile } from "./profile.model";
 import { User } from "./user.model";
 import { AppError } from "../../utils/errors";
 import { sanitizeUser } from "../../utils/helpers";
+import { hashPin, isValidPinFormat, verifyPin } from "../../utils/pin";
+
+const loadUserForClient = (userId: string) =>
+  User.findById(userId).select("+withdrawalPinHash");
 
 function calculateAge(dateOfBirth: Date): number {
   const today = new Date();
@@ -33,7 +37,9 @@ export const completeOnboarding = async (
     throw new AppError("You must be between 16 and 100 years old", 400);
   }
 
-  const user = await User.findByIdAndUpdate(userId, { name: data.name.trim() }, { new: true });
+  const user = await User.findByIdAndUpdate(userId, { name: data.name.trim() }, { new: true }).select(
+    "+withdrawalPinHash"
+  );
   if (!user) throw new AppError("User not found", 404);
 
   const profileData = {
@@ -56,7 +62,7 @@ export const completeOnboarding = async (
 };
 
 export const getProfile = async (userId: string) => {
-  const user = await User.findById(userId);
+  const user = await loadUserForClient(userId);
   if (!user) throw new AppError("User not found", 404);
   const profile = await Profile.findOne({ userId });
   return { user: sanitizeUser(user), profile };
@@ -91,6 +97,43 @@ export const updateProfile = async (
     new: true,
     upsert: true,
   });
-  const user = await User.findById(userId);
+  const user = await loadUserForClient(userId);
   return { user: sanitizeUser(user!), profile };
+};
+
+export const getWithdrawalPinStatus = async (userId: string) => {
+  const user = await loadUserForClient(userId);
+  if (!user) throw new AppError("User not found", 404);
+  return { pinSet: Boolean(user.withdrawalPinHash) };
+};
+
+export const setWithdrawalPin = async (
+  userId: string,
+  data: { pin: string; confirmPin: string; currentPin?: string }
+) => {
+  if (data.pin !== data.confirmPin) {
+    throw new AppError("PIN confirmation does not match", 400);
+  }
+  if (!isValidPinFormat(data.pin)) {
+    throw new AppError("PIN must be 4–6 digits", 400);
+  }
+
+  const user = await loadUserForClient(userId);
+  if (!user) throw new AppError("User not found", 404);
+
+  if (user.withdrawalPinHash) {
+    if (!data.currentPin) {
+      throw new AppError("Current PIN is required to change your withdrawal PIN", 400);
+    }
+    if (!isValidPinFormat(data.currentPin)) {
+      throw new AppError("Current PIN must be 4–6 digits", 400);
+    }
+    const valid = await verifyPin(data.currentPin, user.withdrawalPinHash);
+    if (!valid) throw new AppError("Current PIN is incorrect", 403);
+  }
+
+  user.withdrawalPinHash = await hashPin(data.pin);
+  await user.save();
+
+  return { pinSet: true };
 };

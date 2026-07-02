@@ -1,9 +1,11 @@
 import { Payment } from "./payment.model";
 import { Survey } from "../surveys/survey.model";
-import { Withdrawal } from "../wallets/withdrawal.model";
-import { Transaction } from "../wallets/transaction.model";
+import { syncWithdrawalByReference } from "../wallets/withdrawalSync";
 import { paystackService } from "../../providers/paystack/paystack.service";
 import { AppError } from "../../utils/errors";
+import { createLogger } from "../../utils/logger";
+
+const log = createLogger("Payments");
 
 export const verifyPayment = async (reference: string) => {
   const payment = await Payment.findOne({ reference });
@@ -48,6 +50,8 @@ export const verifyPayment = async (reference: string) => {
 };
 
 export const handlePaystackWebhook = async (event: string, data: Record<string, unknown>) => {
+  log.info("Paystack webhook received", { event, reference: data.reference });
+
   if (event === "charge.success") {
     const reference = data.reference as string;
     if (reference) await verifyPayment(reference);
@@ -65,26 +69,21 @@ export const handlePaystackWebhook = async (event: string, data: Record<string, 
 
   if (event === "transfer.success" || event === "transfer.failed") {
     const reference = data.reference as string;
-    if (!reference) return;
-
-    const withdrawal = await Withdrawal.findOne({ reference });
-    if (!withdrawal) return;
-
-    withdrawal.status = event === "transfer.success" ? "COMPLETED" : "FAILED";
-    await withdrawal.save();
-
-    await Transaction.findOneAndUpdate(
-      { reference },
-      { status: event === "transfer.success" ? "COMPLETED" : "FAILED" }
-    );
-
-    if (event === "transfer.failed") {
-      const { Wallet } = await import("../wallets/wallet.model");
-      const wallet = await Wallet.findOne({ userId: withdrawal.userId });
-      if (wallet) {
-        wallet.availableBalance += withdrawal.amount;
-        await wallet.save();
-      }
+    const transferCode = data.transfer_code as string | undefined;
+    log.info("Transfer webhook — syncing withdrawal", {
+      event,
+      reference,
+      transferCode,
+      paystackStatus: data.status,
+    });
+    if (!reference) {
+      log.warn("Transfer webhook missing reference", { event, data });
+      return;
     }
+    const result = await syncWithdrawalByReference(reference);
+    log.info("Transfer webhook sync result", {
+      reference,
+      withdrawalStatus: result?.status,
+    });
   }
 };

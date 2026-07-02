@@ -88,6 +88,19 @@ router.get(
   })
 );
 
+router.get(
+  "/withdrawals/:id",
+  requireAuth,
+  requireRole("respondent", "admin"),
+  asyncHandler(async (req, res) => {
+    const result = await walletsService.getWithdrawalStatus(
+      req.user!._id.toString(),
+      String(req.params.id)
+    );
+    res.json({ success: true, ...result });
+  })
+);
+
 router.post(
   "/withdrawals",
   requireAuth,
@@ -97,13 +110,15 @@ router.post(
     Joi.object({
       amount: Joi.number().min(100).required(),
       bankId: Joi.string().required(),
+      pin: Joi.string().pattern(/^\d{4,6}$/).required(),
     })
   ),
   asyncHandler(async (req, res) => {
     const withdrawal = await walletsService.requestWithdrawal(
-      req.user!,
+      req.user!._id.toString(),
       req.body.amount,
-      req.body.bankId
+      req.body.bankId,
+      req.body.pin
     );
     res.status(201).json({ success: true, withdrawal });
   })
