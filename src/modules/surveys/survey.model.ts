@@ -46,6 +46,7 @@ export interface ISurvey extends Document {
   responsesReceived: number;
   status: SurveyStatus;
   billingModel: BillingModel;
+  draftStep?: number;
   spendingCap: number;
   amountSpent: number;
   billingLocked: boolean;
@@ -115,6 +116,7 @@ const surveySchema = new Schema<ISurvey>(
       enum: ["DRAFT", "PENDING_PAYMENT", "ACTIVE", "PAUSED", "COMPLETED", "CANCELLED"],
       default: "DRAFT",
     },
+    draftStep: { type: Number, default: 0, min: 0, max: 6 },
     billingModel: {
       type: String,
       enum: ["PREPAID", "PAYG"],

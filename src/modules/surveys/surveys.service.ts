@@ -105,6 +105,7 @@ export const createSurvey = async (
     questions,
     billingModel: "PREPAID",
     status: "DRAFT",
+    draftStep: data.draftStep ?? 0,
     ...pricing,
   });
 
@@ -118,7 +119,15 @@ export const updateSurvey = async (
 ) => {
   const survey = await Survey.findOne({ _id: surveyId, researcherId });
   if (!survey) throw new AppError("Survey not found", 404);
-  if (survey.status !== "DRAFT") throw new AppError("Only draft surveys can be edited", 400);
+
+  const editableStatuses = ["DRAFT", "PENDING_PAYMENT"];
+  if (!editableStatuses.includes(survey.status)) {
+    throw new AppError("Only draft or pending-payment surveys can be edited", 400);
+  }
+
+  if (survey.status === "PENDING_PAYMENT" && data.questions !== undefined) {
+    throw new AppError("Questions cannot be changed after payment has been initiated", 400);
+  }
 
   if (data.title !== undefined) survey.title = data.title;
   if (data.description !== undefined) survey.description = data.description;
@@ -127,7 +136,8 @@ export const updateSurvey = async (
   if (data.responsesNeeded !== undefined) survey.responsesNeeded = data.responsesNeeded;
   if (data.aiSpamFilterEnabled !== undefined) survey.aiSpamFilterEnabled = data.aiSpamFilterEnabled;
   if (data.aiAnalyticsEnabled !== undefined) survey.aiAnalyticsEnabled = data.aiAnalyticsEnabled;
-  if (data.questions !== undefined) {
+  if (data.draftStep !== undefined) survey.draftStep = data.draftStep;
+  if (data.questions !== undefined && survey.status === "DRAFT") {
     survey.questions = normalizeQuestions(data.questions);
   }
 
@@ -156,6 +166,26 @@ export const getSurveyById = async (surveyId: string, researcherId?: string) => 
   return survey;
 };
 
+const resumePrepaidPayment = async (survey: ISurvey) => {
+  const pending = await Payment.findOne({
+    surveyId: survey._id,
+    purpose: "PREPAID",
+    status: "PENDING",
+  }).sort({ createdAt: -1 });
+
+  if (pending?.authorizationUrl) {
+    return {
+      billingModel: "PREPAID" as const,
+      authorizationUrl: pending.authorizationUrl,
+      reference: pending.reference,
+      amount: pending.amount,
+      resumed: true,
+    };
+  }
+
+  throw new AppError("No pending payment found for this survey", 400);
+};
+
 export const launchSurvey = async (
   researcherId: string,
   surveyId: string,
@@ -163,6 +193,11 @@ export const launchSurvey = async (
 ) => {
   const survey = await Survey.findOne({ _id: surveyId, researcherId });
   if (!survey) throw new AppError("Survey not found", 404);
+
+  if (survey.status === "PENDING_PAYMENT") {
+    return resumePrepaidPayment(survey);
+  }
+
   if (survey.status !== "DRAFT") throw new AppError("Survey cannot be launched", 400);
   if (!survey.questions.length) throw new AppError("Survey must have questions", 400);
   if (!survey.estimatedCompletionTimeSeconds) {

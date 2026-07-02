@@ -74,6 +74,7 @@ router.post(
       responsesNeeded: Joi.number().min(1).required(),
       aiSpamFilterEnabled: Joi.boolean().default(false),
       aiAnalyticsEnabled: Joi.boolean().default(false),
+      draftStep: Joi.number().min(0).max(6).optional(),
       questions: Joi.array().items(questionSchema).default([]),
     })
   ),
@@ -144,6 +145,7 @@ router.patch(
       responsesNeeded: Joi.number().min(1).optional(),
       aiSpamFilterEnabled: Joi.boolean().optional(),
       aiAnalyticsEnabled: Joi.boolean().optional(),
+      draftStep: Joi.number().min(0).max(6).optional(),
       questions: Joi.array().items(questionSchema).optional(),
     })
   ),
