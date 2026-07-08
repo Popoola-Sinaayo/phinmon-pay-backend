@@ -123,6 +123,16 @@ router.get(
 );
 
 router.get(
+  "/respondent-pool",
+  requireAuth,
+  requireRole("researcher", "admin"),
+  asyncHandler(async (_req, res) => {
+    const stats = await surveysService.getRespondentPoolStats();
+    res.json({ success: true, ...stats });
+  })
+);
+
+router.get(
   "/:id",
   requireAuth,
   asyncHandler(async (req, res) => {

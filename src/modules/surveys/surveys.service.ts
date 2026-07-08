@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from "uuid";
 import { Survey, ISurvey, IQuestion, SurveyAudience } from "./survey.model";
 import { SurveyResponse } from "../responses/response.model";
 import { Payment } from "../payments/payment.model";
+import { User } from "../users/user.model";
 import { paystackService } from "../../providers/paystack/paystack.service";
 import {
   computeSurveyPricing,
@@ -182,6 +183,21 @@ export const updateSurvey = async (
   Object.assign(survey, pricing);
   await survey.save();
   return survey;
+};
+
+export const getRespondentPoolStats = async () => {
+  const baseQuery = {
+    role: "respondent" as const,
+    ninVerified: true,
+    status: { $ne: "SUSPENDED" as const },
+  };
+
+  const [verifiedRespondents, premiumRespondents] = await Promise.all([
+    User.countDocuments(baseQuery),
+    User.countDocuments({ ...baseQuery, livenessVerified: true }),
+  ]);
+
+  return { verifiedRespondents, premiumRespondents };
 };
 
 export const getResearcherSurveys = async (researcherId: string) => {
