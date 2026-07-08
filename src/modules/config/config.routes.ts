@@ -37,6 +37,18 @@ router.get(
       aiSpamFilterCostPerResponse: addOns.spamFilterPerResponse,
       aiAnalyticsEnabled: cfg.FEATURE_AI_ANALYTICS,
       aiSpamFilterEnabled: cfg.FEATURE_AI_SPAM_FILTER,
+      timeWeights: TIME_WEIGHTS,
+      questionTypeLabels: {
+        boolean: "Yes / No",
+        single_choice: "Single choice",
+        multiple_choice: "Multiple choice",
+        rating: "Rating scale",
+        number: "Number input",
+        text_short: "Short text",
+        text_long: "Long text",
+        text: "Short text",
+      },
+      multipleChoiceTimeFormula: "6s base + 2s per option",
     });
   })
 );

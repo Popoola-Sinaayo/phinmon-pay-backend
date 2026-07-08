@@ -50,6 +50,8 @@ router.post(
       estimatedTimeMinutes: pricing.estimatedCompletionTimeMinutes,
       rewardPerResponseStandard: pricing.rewardPerResponseStandard,
       rewardPerResponsePremium: pricing.rewardPerResponsePremium,
+      payoutPerResponse: pricing.payoutPerResponse,
+      budget: pricing.budget,
       platformFeeRate: pricing.platformFeeRate,
       platformFeeAmount: pricing.platformFeeAmount,
       aiSpamFilterCost: pricing.aiSpamFilterCost,
@@ -57,6 +59,7 @@ router.post(
       aiAddOnsCost: pricing.aiAddOnsCost,
       totalCost: pricing.totalCost,
       highComplexity: pricing.highComplexity,
+      questionBreakdown: pricing.questionBreakdown,
     });
   })
 );
@@ -156,6 +159,19 @@ router.patch(
       req.body
     );
     res.json({ success: true, survey });
+  })
+);
+
+router.get(
+  "/:id/payment",
+  requireAuth,
+  requireRole("researcher", "admin"),
+  asyncHandler(async (req, res) => {
+    const result = await surveysService.getSurveyPaymentStatus(
+      req.user!._id.toString(),
+      String(req.params.id)
+    );
+    res.json({ success: true, ...result });
   })
 );
 

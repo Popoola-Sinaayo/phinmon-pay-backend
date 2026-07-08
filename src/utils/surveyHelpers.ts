@@ -49,7 +49,7 @@ export const normalizeQuestionType = (type: string): QuestionType => {
   return type as QuestionType;
 };
 
-const questionTimeSeconds = (question: Pick<IQuestion, "type" | "options">): number => {
+export const questionTimeSeconds = (question: Pick<IQuestion, "type" | "options">): number => {
   const type = normalizeQuestionType(question.type);
 
   if (type === "multiple_choice") {
@@ -171,3 +171,21 @@ export const isEligibleForSurvey = (
 export const isVisibleSurvey = (targetAudience: string): boolean => {
   return targetAudience === "ALL_VERIFIED" || targetAudience === "PREMIUM_ONLY";
 };
+
+export interface QuestionTimeBreakdownItem {
+  index: number;
+  type: QuestionType;
+  seconds: number;
+  optionCount?: number;
+}
+
+export const getQuestionTimeBreakdown = (
+  questions: Pick<IQuestion, "type" | "options">[]
+): QuestionTimeBreakdownItem[] =>
+  questions.map((q, i) => ({
+    index: i + 1,
+    type: normalizeQuestionType(q.type),
+    seconds: questionTimeSeconds(q),
+    optionCount:
+      normalizeQuestionType(q.type) === "multiple_choice" ? q.options?.length : undefined,
+  }));

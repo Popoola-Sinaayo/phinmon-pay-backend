@@ -5,6 +5,7 @@ import { Payment } from "../payments/payment.model";
 import { paystackService } from "../../providers/paystack/paystack.service";
 import {
   computeSurveyPricing,
+  getQuestionTimeBreakdown,
   isVisibleSurvey,
   normalizeQuestionType,
 } from "../../utils/surveyHelpers";
@@ -67,13 +68,42 @@ export const previewSurveyCost = (data: {
   aiAnalyticsEnabled?: boolean;
 }) => {
   const questions = normalizeQuestions(data.questions || []);
-  return applyPricing({
+  const pricing = applyPricing({
     questions,
     responsesNeeded: data.responsesNeeded,
     targetAudience: data.targetAudience,
     aiSpamFilterEnabled: data.aiSpamFilterEnabled,
     aiAnalyticsEnabled: data.aiAnalyticsEnabled,
   });
+  return {
+    ...pricing,
+    questionBreakdown: getQuestionTimeBreakdown(questions),
+  };
+};
+
+export const getSurveyPaymentStatus = async (researcherId: string, surveyId: string) => {
+  const survey = await Survey.findOne({ _id: surveyId, researcherId });
+  if (!survey) throw new AppError("Survey not found", 404);
+
+  const payment = await Payment.findOne({
+    surveyId: survey._id,
+    purpose: "PREPAID",
+  }).sort({ createdAt: -1 });
+
+  if (!payment) {
+    return { surveyStatus: survey.status, payment: null };
+  }
+
+  return {
+    surveyStatus: survey.status,
+    payment: {
+      reference: payment.reference,
+      status: payment.status,
+      amount: payment.amount,
+      authorizationUrl: payment.authorizationUrl,
+      createdAt: payment.createdAt,
+    },
+  };
 };
 
 export const createSurvey = async (
