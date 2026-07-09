@@ -28,6 +28,8 @@ const config = () => ({
     process.env.QOREID_NIN_LIVENESS_PRODUCT_CODE || "liveness_nin",
   NIN_ENCRYPTION_KEY: process.env.NIN_ENCRYPTION_KEY || "32-char-secret-key-change-me!!",
   FEATURE_LIVENESS: process.env.FEATURE_LIVENESS === "true",
+  /** Gates premium liveness verification and PREMIUM_ONLY survey audience. Off until launch. */
+  FEATURE_PREMIUM_LIVENESS: process.env.FEATURE_PREMIUM_LIVENESS === "true",
   LIVENESS_PROVIDER: process.env.LIVENESS_PROVIDER || "qoreid",
   PLATFORM_FEE_PERCENT: parseFloat(process.env.PLATFORM_FEE_PERCENT || "25"),
   MIN_WITHDRAWAL_AMOUNT: parseFloat(process.env.MIN_WITHDRAWAL_AMOUNT || "100"),

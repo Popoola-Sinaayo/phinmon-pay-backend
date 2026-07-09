@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { asyncHandler } from "../../middleware/errorHandler";
 import config from "../../config";
+import { isPremiumAudienceEnabled, isLivenessEnabled } from "../../providers/liveness";
 import { calculateReward, getPlatformFeeRate } from "../../utils/surveyHelpers";
 import {
   MIN_PREMIUM_REWARD,
@@ -12,6 +13,20 @@ import {
 } from "../surveys/pricing.constants";
 
 const router = Router();
+
+/** Public platform feature flags for UI gating. */
+router.get(
+  "/features",
+  asyncHandler(async (_req, res) => {
+    const premiumLivenessEnabled = isLivenessEnabled();
+    res.json({
+      success: true,
+      premiumLivenessEnabled,
+      premiumAudienceEnabled: isPremiumAudienceEnabled(),
+      premiumLivenessComingSoon: !premiumLivenessEnabled,
+    });
+  })
+);
 
 /** Public pricing config used to render marketing pricing without auth. */
 router.get(

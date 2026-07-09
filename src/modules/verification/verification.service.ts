@@ -264,12 +264,15 @@ export const getVerificationStatus = async (userId: string) => {
   if (!user) throw new AppError("User not found", 404);
 
   const profile = await Profile.findOne({ userId });
+  const premiumLivenessEnabled = isLivenessEnabled();
 
   return {
     ...getNinStatusPayload(user),
     profileComplete: !!(user.name && profile?.dateOfBirth),
     registeredName: user.name,
     dateOfBirth: profile?.dateOfBirth ? formatDateOnly(profile.dateOfBirth) : null,
+    premiumLivenessEnabled,
+    premiumLivenessComingSoon: !premiumLivenessEnabled,
   };
 };
 

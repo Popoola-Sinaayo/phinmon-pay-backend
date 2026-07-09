@@ -4,6 +4,7 @@ import { SurveyResponse } from "../responses/response.model";
 import { Payment } from "../payments/payment.model";
 import { User } from "../users/user.model";
 import { paystackService } from "../../providers/paystack/paystack.service";
+import { isPremiumAudienceEnabled } from "../../providers/liveness";
 import {
   computeSurveyPricing,
   getQuestionTimeBreakdown,
@@ -107,6 +108,15 @@ export const getSurveyPaymentStatus = async (researcherId: string, surveyId: str
   };
 };
 
+const assertPremiumAudienceAllowed = (targetAudience?: SurveyAudience) => {
+  if (targetAudience === "PREMIUM_ONLY" && !isPremiumAudienceEnabled()) {
+    throw new AppError(
+      "Premium respondent targeting is coming soon. Use verified (NIN) respondents for now.",
+      400
+    );
+  }
+};
+
 export const createSurvey = async (
   researcherId: string,
   data: Partial<ISurvey> & { questions?: IQuestion[] }
@@ -116,6 +126,7 @@ export const createSurvey = async (
   }
 
   const targetAudience = (data.targetAudience || "ALL_VERIFIED") as SurveyAudience;
+  assertPremiumAudienceAllowed(targetAudience);
   const responsesNeeded = data.responsesNeeded || 1;
   const questions = normalizeQuestions(data.questions || []);
   const pricing = applyPricing({
@@ -163,7 +174,10 @@ export const updateSurvey = async (
   if (data.title !== undefined) survey.title = data.title;
   if (data.description !== undefined) survey.description = data.description;
   if (data.category !== undefined) survey.category = data.category;
-  if (data.targetAudience !== undefined) survey.targetAudience = data.targetAudience;
+  if (data.targetAudience !== undefined) {
+    assertPremiumAudienceAllowed(data.targetAudience as SurveyAudience);
+    survey.targetAudience = data.targetAudience;
+  }
   if (data.responsesNeeded !== undefined) survey.responsesNeeded = data.responsesNeeded;
   if (data.aiSpamFilterEnabled !== undefined) survey.aiSpamFilterEnabled = data.aiSpamFilterEnabled;
   if (data.aiAnalyticsEnabled !== undefined) survey.aiAnalyticsEnabled = data.aiAnalyticsEnabled;
