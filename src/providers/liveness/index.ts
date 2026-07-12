@@ -31,7 +31,7 @@ export const getLivenessProvider = (): LivenessProvider => {
 
 export const isLivenessEnabled = (): boolean => {
   const cfg = config();
-  return cfg.FEATURE_PREMIUM_LIVENESS || cfg.FEATURE_LIVENESS;
+  return cfg.FEATURE_PREMIUM_LIVENESS;
 };
 
 export const isPremiumAudienceEnabled = (): boolean => isLivenessEnabled();

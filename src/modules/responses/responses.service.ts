@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import { Survey } from "../surveys/survey.model";
 import { SurveyResponse } from "./response.model";
+import { SurveyReservation } from "./reservation.model";
 import { ResponseFlag } from "./responseFlag.model";
 import { Wallet } from "../wallets/wallet.model";
 import { Transaction } from "../wallets/transaction.model";
@@ -11,9 +12,84 @@ import config from "../../config";
 import { IUser } from "../users/user.model";
 import { detectSpamAnswers } from "./spam.service";
 import { maybeSuspendUser } from "./suspension.service";
+import { releaseReservation } from "./reservation.service";
+import { createLogger } from "../../utils/logger";
+
+const log = createLogger("Responses");
 
 const RAPID_SUBMIT_WINDOW_MS = 60 * 1000;
 const RAPID_SUBMIT_THRESHOLD = 3;
+
+const isDuplicateKeyError = (err: unknown): boolean =>
+  !!err && typeof err === "object" && (err as { code?: number }).code === 11000;
+
+/**
+ * Atomically claims one response slot. Returns true only if capacity remained
+ * (responsesReceived < responsesNeeded) at the moment of the update. This is the
+ * authoritative guard that prevents paying out more than the funded budget under
+ * concurrent submissions. If the user held a reservation, its slot is converted
+ * (reservedSlots decremented) in the same atomic step.
+ */
+const claimResponseSlot = async (surveyId: string, hadReservation: boolean) => {
+  const decReserved = hadReservation ? 1 : 0;
+  return Survey.findOneAndUpdate(
+    {
+      _id: surveyId,
+      status: "ACTIVE",
+      billingLocked: { $ne: true },
+      $expr: { $lt: ["$responsesReceived", "$responsesNeeded"] },
+    },
+    [
+      {
+        $set: {
+          responsesReceived: { $add: ["$responsesReceived", 1] },
+          reservedSlots: {
+            $max: [{ $subtract: ["$reservedSlots", decReserved] }, 0],
+          },
+        },
+      },
+      {
+        $set: {
+          status: {
+            $cond: [
+              { $gte: ["$responsesReceived", "$responsesNeeded"] },
+              "COMPLETED",
+              "$status",
+            ],
+          },
+        },
+      },
+    ],
+    { new: true }
+  );
+};
+
+/** Reverts a slot claim if the response could not be persisted afterwards. */
+const revertResponseSlot = async (surveyId: string) => {
+  await Survey.updateOne({ _id: surveyId }, [
+    {
+      $set: {
+        responsesReceived: { $max: [{ $subtract: ["$responsesReceived", 1] }, 0] },
+      },
+    },
+    {
+      $set: {
+        status: {
+          $cond: [
+            {
+              $and: [
+                { $eq: ["$status", "COMPLETED"] },
+                { $lt: ["$responsesReceived", "$responsesNeeded"] },
+              ],
+            },
+            "ACTIVE",
+            "$status",
+          ],
+        },
+      },
+    },
+  ]);
+};
 
 const clawbackReward = async (
   userId: string,
@@ -56,19 +132,21 @@ export const submitResponse = async (
   if (!user.ninVerified) throw new AppError("NIN verification required", 403);
 
   const survey = await Survey.findById(surveyId);
-  if (!survey) throw new AppError("Survey not found", 404);
-  if (survey.status !== "ACTIVE") throw new AppError("Survey is not active", 400);
-  if (survey.billingLocked) throw new AppError("Survey is temporarily unavailable", 400);
+  if (!survey) throw new AppError("Task not found", 404);
+  if (survey.status !== "ACTIVE") throw new AppError("This task is not active", 400);
+  if (survey.billingLocked) throw new AppError("This task is temporarily unavailable", 400);
+  // Non-authoritative early check for a friendly error; the atomic claim below is
+  // what actually protects capacity under concurrency.
   if (survey.responsesReceived >= survey.responsesNeeded) {
-    throw new AppError("Survey has reached maximum responses", 400);
+    throw new AppError("This task has reached its response limit", 409, { code: "FULL" });
   }
 
   if (!isEligibleForSurvey(survey.targetAudience, user.ninVerified, user.livenessVerified)) {
-    throw new AppError("You are not eligible for this survey", 403);
+    throw new AppError("You are not eligible for this task", 403);
   }
 
   const existing = await SurveyResponse.findOne({ surveyId, userId: user._id });
-  if (existing) throw new AppError("You have already submitted this survey", 409);
+  if (existing) throw new AppError("You have already completed this task", 409);
 
   for (const q of survey.questions) {
     if (q.required) {
@@ -112,14 +190,47 @@ export const submitResponse = async (
   const autoApprove = config().AUTO_APPROVE_RESPONSES && !forcePending;
   const status = autoApprove ? "APPROVED" : "PENDING";
 
-  const response = await SurveyResponse.create({
+  // Convert the user's reservation (if any) into a received response atomically.
+  const hadReservation = !!(await SurveyReservation.findOne({
     surveyId,
     userId: user._id,
-    answers,
-    status,
-    rewardAmount: survey.payoutPerResponse,
-    spamSuspected,
-  });
+  })
+    .select("_id")
+    .lean());
+
+  const claimed = await claimResponseSlot(surveyId, hadReservation);
+  if (!claimed) {
+    // Task filled up between reservation and submit (or was closed). Give back
+    // the held slot so it can be reused, and report cleanly.
+    await releaseReservation(user._id.toString(), surveyId).catch(() => {});
+    throw new AppError("This task just reached its response limit before your submission.", 409, {
+      code: "FULL",
+    });
+  }
+
+  let response;
+  try {
+    response = await SurveyResponse.create({
+      surveyId,
+      userId: user._id,
+      answers,
+      status,
+      rewardAmount: survey.payoutPerResponse,
+      spamSuspected,
+    });
+  } catch (err) {
+    // Persisting the response failed; return the slot we just claimed.
+    await revertResponseSlot(surveyId);
+    if (isDuplicateKeyError(err)) {
+      throw new AppError("You have already completed this task", 409);
+    }
+    throw err;
+  }
+
+  // Slot secured and response stored: remove the now-consumed reservation doc.
+  // The counter was already decremented inside claimResponseSlot, so we only
+  // delete the document here (no further counter change).
+  await SurveyReservation.deleteOne({ surveyId, userId: user._id }).catch(() => {});
 
   if (spamSuspected) {
     await FraudFlag.create({
@@ -130,45 +241,49 @@ export const submitResponse = async (
     });
   }
 
-  const freshSurvey = await Survey.findById(surveyId);
-  if (!freshSurvey) throw new AppError("Survey not found", 404);
+  try {
+    let wallet = await Wallet.findOne({ userId: user._id });
+    if (!wallet) {
+      wallet = await Wallet.create({ userId: user._id });
+    }
 
-  freshSurvey.responsesReceived += 1;
-  if (freshSurvey.responsesReceived >= freshSurvey.responsesNeeded) {
-    freshSurvey.status = "COMPLETED";
-  }
-  await freshSurvey.save();
-
-  let wallet = await Wallet.findOne({ userId: user._id });
-  if (!wallet) {
-    wallet = await Wallet.create({ userId: user._id });
-  }
-
-  if (autoApprove) {
-    wallet.availableBalance += survey.payoutPerResponse;
-    wallet.lifetimeEarnings += survey.payoutPerResponse;
-    await Transaction.create({
-      userId: user._id,
-      type: "EARNING",
+    if (autoApprove) {
+      wallet.availableBalance += survey.payoutPerResponse;
+      wallet.lifetimeEarnings += survey.payoutPerResponse;
+      await Transaction.create({
+        userId: user._id,
+        type: "EARNING",
+        amount: survey.payoutPerResponse,
+        reference: `EARN-${uuidv4()}`,
+        status: "COMPLETED",
+        description: `Earning from survey: ${survey.title}`,
+        metadata: { surveyId, responseId: response._id },
+      });
+    } else {
+      wallet.pendingBalance += survey.payoutPerResponse;
+      await Transaction.create({
+        userId: user._id,
+        type: "EARNING",
+        amount: survey.payoutPerResponse,
+        reference: `EARN-${uuidv4()}`,
+        status: "PENDING",
+        description: `Pending earning from survey: ${survey.title}`,
+        metadata: { surveyId, responseId: response._id },
+      });
+    }
+    await wallet.save();
+  } catch (err) {
+    // The slot and response are committed but crediting failed. Do NOT roll back
+    // the response (the researcher legitimately received it); log for
+    // reconciliation instead of risking a double payout.
+    log.error("Wallet credit failed after response committed  needs reconciliation", {
+      userId: user._id.toString(),
+      surveyId,
+      responseId: response._id.toString(),
       amount: survey.payoutPerResponse,
-      reference: `EARN-${uuidv4()}`,
-      status: "COMPLETED",
-      description: `Earning from survey: ${survey.title}`,
-      metadata: { surveyId, responseId: response._id },
-    });
-  } else {
-    wallet.pendingBalance += survey.payoutPerResponse;
-    await Transaction.create({
-      userId: user._id,
-      type: "EARNING",
-      amount: survey.payoutPerResponse,
-      reference: `EARN-${uuidv4()}`,
-      status: "PENDING",
-      description: `Pending earning from survey: ${survey.title}`,
-      metadata: { surveyId, responseId: response._id },
+      message: (err as Error).message,
     });
   }
-  await wallet.save();
 
   return { response, rewardAmount: survey.payoutPerResponse, status, spamSuspected };
 };

@@ -44,6 +44,7 @@ export interface ISurvey extends Document {
   rewardPerResponsePremium: number;
   responsesNeeded: number;
   responsesReceived: number;
+  reservedSlots: number;
   status: SurveyStatus;
   billingModel: BillingModel;
   draftStep?: number;
@@ -111,6 +112,7 @@ const surveySchema = new Schema<ISurvey>(
     rewardPerResponsePremium: { type: Number, default: 0 },
     responsesNeeded: { type: Number, required: true },
     responsesReceived: { type: Number, default: 0 },
+    reservedSlots: { type: Number, default: 0, min: 0 },
     status: {
       type: String,
       enum: ["DRAFT", "PENDING_PAYMENT", "ACTIVE", "PAUSED", "COMPLETED", "CANCELLED"],

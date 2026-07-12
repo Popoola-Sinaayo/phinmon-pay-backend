@@ -18,6 +18,7 @@ import paymentsRoutes from "./modules/payments/payments.routes";
 import adminRoutes from "./modules/admin/admin.routes";
 import analyticsRoutes from "./modules/analytics/analytics.routes";
 import configRoutes from "./modules/config/config.routes";
+import { sweepExpiredReservations } from "./modules/responses/reservation.service";
 
 const app = express();
 
@@ -50,6 +51,8 @@ app.use("/api/v1/config", configRoutes);
 
 app.use(errorHandler);
 
+const RESERVATION_SWEEP_INTERVAL_MS = 60 * 1000;
+
 connectToDB()
   .then(() => {
     app.listen(config().PORT, () => {
@@ -59,6 +62,15 @@ connectToDB()
         livenessProvider: config().LIVENESS_PROVIDER,
       });
     });
+
+    // Periodically release slots held by abandoned/expired task sessions so
+    // capacity frees up even if the client never calls the release endpoint.
+    const sweep = setInterval(() => {
+      sweepExpiredReservations().catch((err) => {
+        logger.error("Reservation sweep failed", { error: (err as Error).message });
+      });
+    }, RESERVATION_SWEEP_INTERVAL_MS);
+    sweep.unref?.();
   })
   .catch((err) => {
     logger.error("Failed to start server", { error: (err as Error).message });

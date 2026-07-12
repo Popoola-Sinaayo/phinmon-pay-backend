@@ -4,8 +4,36 @@ import { asyncHandler } from "../../middleware/errorHandler";
 import { validate } from "../../middleware/validate";
 import { requireAuth, requireRole, requireNinVerified } from "../../middleware/auth";
 import * as responsesService from "./responses.service";
+import * as reservationService from "./reservation.service";
 
 const router = Router();
+
+router.post(
+  "/surveys/:surveyId/start",
+  requireAuth,
+  requireRole("respondent", "admin"),
+  requireNinVerified,
+  asyncHandler(async (req, res) => {
+    const result = await reservationService.startSurvey(
+      req.user!,
+      String(req.params.surveyId)
+    );
+    res.json({ success: true, ...result });
+  })
+);
+
+router.post(
+  "/surveys/:surveyId/release",
+  requireAuth,
+  requireRole("respondent", "admin"),
+  asyncHandler(async (req, res) => {
+    const result = await reservationService.releaseReservation(
+      req.user!._id.toString(),
+      String(req.params.surveyId)
+    );
+    res.json({ success: true, ...result });
+  })
+);
 
 router.post(
   "/surveys/:surveyId/responses",
