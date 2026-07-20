@@ -249,7 +249,7 @@ export class PaystackService {
 
   async verifyTransfer(reference: string): Promise<TransferVerifyResult | null> {
     if (!this.isConfigured()) {
-      log.debug("verifyTransfer mock — Paystack not configured", { reference });
+      log.debug("verifyTransfer mock  Paystack not configured", { reference });
       return { status: "success", reference, amount: 0 };
     }
 
@@ -299,7 +299,7 @@ export class PaystackService {
 
   async fetchTransfer(transferCode: string): Promise<TransferVerifyResult | null> {
     if (!this.isConfigured()) {
-      log.debug("fetchTransfer mock — Paystack not configured", { transferCode });
+      log.debug("fetchTransfer mock  Paystack not configured", { transferCode });
       return { status: "success", reference: transferCode, amount: 0 };
     }
 
@@ -360,7 +360,7 @@ export class PaystackService {
     }
 
     if (transferCode) {
-      log.info("Reference verify empty — trying transfer code", { reference, transferCode });
+      log.info("Reference verify empty  trying transfer code", { reference, transferCode });
       const byCode = await this.fetchTransfer(transferCode);
       if (byCode?.status) {
         log.info("Resolved via transfer code", { transferCode, status: byCode.status });
@@ -370,7 +370,7 @@ export class PaystackService {
       return byCode;
     }
 
-    log.warn("Could not resolve transfer — no transfer code fallback", { reference });
+    log.warn("Could not resolve transfer  no transfer code fallback", { reference });
     return null;
   }
 

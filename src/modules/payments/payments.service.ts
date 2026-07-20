@@ -77,7 +77,7 @@ export const handlePaystackWebhook = async (event: string, data: Record<string, 
   if (event === "transfer.success" || event === "transfer.failed") {
     const reference = data.reference as string;
     const transferCode = data.transfer_code as string | undefined;
-    log.info("Transfer webhook — syncing withdrawal", {
+    log.info("Transfer webhook  syncing withdrawal", {
       event,
       reference,
       transferCode,

@@ -40,12 +40,12 @@ export const notifyEligibleUsersOfNewSurvey = async (surveyId: string): Promise<
   }
 
   if (survey.status !== "ACTIVE") {
-    log.debug("Skipping notification — survey not active", { surveyId, status: survey.status });
+    log.debug("Skipping notification  survey not active", { surveyId, status: survey.status });
     return;
   }
 
   if (!isVisibleSurvey(survey.targetAudience)) {
-    log.debug("Skipping notification — audience not visible in MVP", {
+    log.debug("Skipping notification  audience not visible in MVP", {
       surveyId,
       targetAudience: survey.targetAudience,
     });
@@ -82,7 +82,7 @@ export const notifyEligibleUsersOfNewSurvey = async (surveyId: string): Promise<
         const payout = payoutForUser(survey);
         await emailProvider.send({
           to: user.email,
-          subject: `New survey — earn ${formatNaira(payout)} · ${survey.title}`,
+          subject: `New survey  earn ${formatNaira(payout)} · ${survey.title}`,
           html: newSurveyEmailTemplate({
             recipientName: user.name,
             surveyTitle: survey.title,

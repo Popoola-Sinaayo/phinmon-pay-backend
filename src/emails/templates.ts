@@ -37,7 +37,7 @@ export const welcomeEmailTemplate = (name: string): string => {
   const bodyHtml = `
     <h1 style="margin:0 0 8px 0;font-size:24px;font-weight:700;color:#1a1a1a;line-height:1.3;">${greeting}</h1>
     <p style="margin:0 0 16px 0;font-size:16px;line-height:26px;color:#5c6370;">
-      You're in. Complete your identity verification, then start earning from verified surveys — or launch your first research campaign.
+      You're in. Complete your identity verification, then start earning from verified surveys  or launch your first research campaign.
     </p>
     ${renderStatRow([
       { label: "Verify", value: "NIN + selfie", highlight: false },
@@ -47,7 +47,7 @@ export const welcomeEmailTemplate = (name: string): string => {
     ${renderCtaButton(dashboardUrl, "Go to dashboard")}`;
 
   return renderEmailLayout({
-    preheader: "Your Phinmon account is ready — verify and start earning.",
+    preheader: "Your Phinmon account is ready  verify and start earning.",
     title: "Welcome to Phinmon",
     bodyHtml,
   });
@@ -96,16 +96,101 @@ export const newSurveyEmailTemplate = (params: NewSurveyEmailParams): string => 
     ])}
     ${renderCtaButton(params.surveyUrl, "View survey & start")}
     <p style="margin:24px 0 0 0;font-size:13px;line-height:20px;color:#9ca3af;text-align:center;">
-      Spots are limited — complete it before slots fill up.
+      Spots are limited  complete it before slots fill up.
     </p>`;
 
   return renderEmailLayout({
-    preheader: `Earn ${formatNaira(params.payoutAmount)} — ${params.surveyTitle}`,
+    preheader: `Earn ${formatNaira(params.payoutAmount)}  ${params.surveyTitle}`,
     title: `New survey: ${params.surveyTitle}`,
     bodyHtml,
     footerNote:
       "You're receiving this because you're eligible for surveys on Phinmon. We'll only email you when new surveys match your verification level.",
   });
+};
+
+export type PlatformReminderParams = {
+  recipientName?: string;
+  template: "use_platform" | "complete_verification" | "custom";
+  customSubject?: string;
+  customMessage?: string;
+  dashboardUrl: string;
+  verifyUrl: string;
+};
+
+export const platformReminderEmailTemplate = (
+  params: PlatformReminderParams
+): { subject: string; html: string } => {
+  const greeting = params.recipientName
+    ? `Hi ${escapeHtml(params.recipientName)},`
+    : "Hi there,";
+
+  if (params.template === "complete_verification") {
+    const bodyHtml = `
+      <p style="margin:0 0 4px 0;font-size:15px;color:#5c6370;">${greeting}</p>
+      <h1 style="margin:0 0 12px 0;font-size:24px;font-weight:700;color:#1a1a1a;line-height:1.3;">Finish verifying your identity</h1>
+      <p style="margin:0 0 16px 0;font-size:16px;line-height:26px;color:#5c6370;">
+        Your Phinmon account is almost ready. Complete NIN verification so you can take paid surveys and withdraw earnings.
+      </p>
+      ${renderStatRow([
+        { label: "Step 1", value: "Verify NIN", highlight: true },
+        { label: "Step 2", value: "Take surveys", highlight: false },
+        { label: "Step 3", value: "Get paid", highlight: false },
+      ])}
+      ${renderCtaButton(params.verifyUrl, "Complete verification")}`;
+
+    return {
+      subject: "Complete your Phinmon verification",
+      html: renderEmailLayout({
+        preheader: "Verify your identity to start earning on Phinmon.",
+        title: "Complete verification",
+        bodyHtml,
+        footerNote:
+          "You're receiving this because your Phinmon account still needs identity verification.",
+      }),
+    };
+  }
+
+  if (params.template === "custom") {
+    const subject = (params.customSubject || "A message from Phinmon").trim();
+    const message = escapeHtml(params.customMessage || "").replace(/\n/g, "<br/>");
+    const bodyHtml = `
+      <p style="margin:0 0 4px 0;font-size:15px;color:#5c6370;">${greeting}</p>
+      <h1 style="margin:0 0 12px 0;font-size:24px;font-weight:700;color:#1a1a1a;line-height:1.3;">${escapeHtml(subject)}</h1>
+      <p style="margin:0 0 16px 0;font-size:16px;line-height:26px;color:#5c6370;">${message}</p>
+      ${renderCtaButton(params.dashboardUrl, "Open Phinmon")}`;
+
+    return {
+      subject,
+      html: renderEmailLayout({
+        preheader: subject,
+        title: subject,
+        bodyHtml,
+      }),
+    };
+  }
+
+  const bodyHtml = `
+    <p style="margin:0 0 4px 0;font-size:15px;color:#5c6370;">${greeting}</p>
+    <h1 style="margin:0 0 12px 0;font-size:24px;font-weight:700;color:#1a1a1a;line-height:1.3;">We miss you on Phinmon</h1>
+    <p style="margin:0 0 16px 0;font-size:16px;line-height:26px;color:#5c6370;">
+      New verified surveys are live. Jump back in to earn rewards, or launch a research campaign if you're building insights.
+    </p>
+    ${renderStatRow([
+      { label: "Surveys", value: "Live now", highlight: true },
+      { label: "Payouts", value: "To wallet", highlight: false },
+      { label: "Access", value: "Anytime", highlight: false },
+    ])}
+    ${renderCtaButton(params.dashboardUrl, "Use Phinmon today")}`;
+
+  return {
+    subject: "Reminder: use Phinmon today",
+    html: renderEmailLayout({
+      preheader: "Come back to Phinmon — surveys and research await.",
+      title: "Use Phinmon today",
+      bodyHtml,
+      footerNote: "You're receiving this because you have a Phinmon account.",
+    }),
+  };
 };
 
 const escapeHtml = (value: string): string =>

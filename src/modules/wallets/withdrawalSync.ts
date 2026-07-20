@@ -34,7 +34,7 @@ export const syncWithdrawalFromPaystack = async (
   });
 
   if (withdrawal.status === "COMPLETED" || withdrawal.status === "FAILED") {
-    log.debug("Sync skipped — withdrawal already terminal", {
+    log.debug("Sync skipped  withdrawal already terminal", {
       reference: withdrawal.reference,
       status: withdrawal.status,
     });
