@@ -80,6 +80,13 @@ export const requestWithdrawal = async (
 ) => {
   const user = await User.findById(userId).select("+withdrawalPinHash");
   if (!user) throw new AppError("User not found", 404);
+  if (user.deletionRequestedAt) {
+    throw new AppError(
+      "Account deletion is pending. Withdrawals are paused until the request is resolved.",
+      403,
+      { code: "DELETION_PENDING" }
+    );
+  }
   if (!user.ninVerified) throw new AppError("NIN verification required for withdrawals", 403);
 
   if (!user.withdrawalPinHash) {

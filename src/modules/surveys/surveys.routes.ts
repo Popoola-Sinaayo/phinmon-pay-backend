@@ -2,7 +2,7 @@ import { Router } from "express";
 import Joi from "joi";
 import { asyncHandler } from "../../middleware/errorHandler";
 import { validate } from "../../middleware/validate";
-import { requireAuth, requireRole } from "../../middleware/auth";
+import { requireAuth, requireRole, requireTermsAccepted } from "../../middleware/auth";
 import * as surveysService from "./surveys.service";
 
 const questionSchema = Joi.object({
@@ -27,10 +27,10 @@ const questionSchema = Joi.object({
 
 const router = Router();
 
+router.use(requireAuth, requireTermsAccepted);
 router.post(
   "/preview-cost",
-  requireAuth,
-  requireRole("researcher", "admin"),
+    requireRole("researcher", "admin"),
   validate(
     Joi.object({
       questions: Joi.array().items(questionSchema).default([]),
@@ -66,8 +66,7 @@ router.post(
 
 router.post(
   "/",
-  requireAuth,
-  requireRole("researcher", "admin"),
+    requireRole("researcher", "admin"),
   validate(
     Joi.object({
       title: Joi.string().required(),
@@ -89,8 +88,7 @@ router.post(
 
 router.get(
   "/mine",
-  requireAuth,
-  requireRole("researcher", "admin"),
+    requireRole("researcher", "admin"),
   asyncHandler(async (req, res) => {
     const surveys = await surveysService.getResearcherSurveys(req.user!._id.toString());
     res.json({ success: true, surveys });
@@ -99,8 +97,7 @@ router.get(
 
 router.get(
   "/available",
-  requireAuth,
-  requireRole("respondent", "admin"),
+    requireRole("respondent", "admin"),
   asyncHandler(async (req, res) => {
     const surveys = await surveysService.getAvailableSurveys(
       req.user!._id.toString(),
@@ -114,8 +111,7 @@ router.get(
 
 router.get(
   "/dashboard",
-  requireAuth,
-  requireRole("researcher", "admin"),
+    requireRole("researcher", "admin"),
   asyncHandler(async (req, res) => {
     const dashboard = await surveysService.getResearcherDashboard(req.user!._id.toString());
     res.json({ success: true, dashboard });
@@ -124,8 +120,7 @@ router.get(
 
 router.get(
   "/respondent-pool",
-  requireAuth,
-  requireRole("researcher", "admin"),
+    requireRole("researcher", "admin"),
   asyncHandler(async (_req, res) => {
     const stats = await surveysService.getRespondentPoolStats();
     res.json({ success: true, ...stats });
@@ -134,8 +129,7 @@ router.get(
 
 router.get(
   "/:id",
-  requireAuth,
-  asyncHandler(async (req, res) => {
+    asyncHandler(async (req, res) => {
     const isResearcher = ["researcher", "admin"].includes(req.user!.role);
     const survey = await surveysService.getSurveyById(
       String(req.params.id),
@@ -147,8 +141,7 @@ router.get(
 
 router.patch(
   "/:id",
-  requireAuth,
-  requireRole("researcher", "admin"),
+    requireRole("researcher", "admin"),
   validate(
     Joi.object({
       title: Joi.string().optional(),
@@ -174,8 +167,7 @@ router.patch(
 
 router.get(
   "/:id/payment",
-  requireAuth,
-  requireRole("researcher", "admin"),
+    requireRole("researcher", "admin"),
   asyncHandler(async (req, res) => {
     const result = await surveysService.getSurveyPaymentStatus(
       req.user!._id.toString(),
@@ -187,8 +179,7 @@ router.get(
 
 router.post(
   "/:id/launch",
-  requireAuth,
-  requireRole("researcher", "admin"),
+    requireRole("researcher", "admin"),
   validate(Joi.object({})),
   asyncHandler(async (req, res) => {
     const result = await surveysService.launchSurvey(
@@ -202,8 +193,7 @@ router.post(
 
 router.post(
   "/:id/enable-analytics",
-  requireAuth,
-  requireRole("researcher", "admin"),
+    requireRole("researcher", "admin"),
   validate(Joi.object({})),
   asyncHandler(async (req, res) => {
     const result = await surveysService.purchaseAnalyticsAddon(
@@ -217,8 +207,7 @@ router.post(
 
 router.get(
   "/:id/export",
-  requireAuth,
-  requireRole("researcher", "admin"),
+    requireRole("researcher", "admin"),
   asyncHandler(async (req, res) => {
     const { csv, filename } = await surveysService.exportSurveyResponses(
       req.user!._id.toString(),

@@ -298,6 +298,7 @@ export const startLiveness = async (userId: string) => {
 
   const idNumber = decryptNIN(user.encryptedNin);
   const provider = getLivenessProvider();
+  // Pass NIN to the provider for session setup only — do not return raw NIN to the browser.
   const session = await provider.startVerification(userId, { idNumber });
 
   log.info("NIN liveness verification session created", {
@@ -305,10 +306,8 @@ export const startLiveness = async (userId: string) => {
     sessionId: session.sessionId,
   });
 
-  return {
-    ...session,
-    idNumber,
-  };
+  const { idNumber: _omitNin, ...safeSession } = session;
+  return safeSession;
 };
 
 export const completeLiveness = async (userId: string, sessionId: string) => {

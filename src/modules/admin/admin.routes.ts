@@ -2,12 +2,12 @@ import { Router } from "express";
 import Joi from "joi";
 import { asyncHandler } from "../../middleware/errorHandler";
 import { validate } from "../../middleware/validate";
-import { requireAuth, requireRole } from "../../middleware/auth";
+import { requireAuth, requireRole, requireTermsAccepted } from "../../middleware/auth";
 import * as adminService from "./admin.service";
 
 const router = Router();
 
-router.use(requireAuth, requireRole("admin"));
+router.use(requireAuth, requireRole("admin"), requireTermsAccepted);
 
 const parseOptionalBoolean = (value: unknown): boolean | undefined => {
   if (value === undefined || value === null || value === "") return undefined;

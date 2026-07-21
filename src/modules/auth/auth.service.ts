@@ -1,6 +1,5 @@
 import jwt from "jsonwebtoken";
 import { Response } from "express";
-import { v4 as uuidv4 } from "uuid";
 import config from "../../config";
 import { OtpCode } from "./otp.model";
 import { User } from "../users/user.model";
@@ -9,16 +8,33 @@ import { getEmailProvider } from "../../providers/email";
 import { otpEmailTemplate, welcomeEmailTemplate } from "../../emails/templates";
 import { sanitizeUser } from "../../utils/helpers";
 import { AppError } from "../../utils/errors";
+import { CURRENT_TERMS_VERSION } from "../../constants/legal";
 
 const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
 
-export const requestOtp = async (email: string, role?: string) => {
+export const requestOtp = async (
+  email: string,
+  role?: string,
+  acceptedTermsVersion?: string
+) => {
   const normalizedEmail = email.toLowerCase().trim();
   let user = await User.findOne({ email: normalizedEmail });
 
   if (!user) {
+    if (acceptedTermsVersion !== CURRENT_TERMS_VERSION) {
+      throw new AppError(
+        "You must accept the Terms of Service and Privacy Policy to create an account",
+        400,
+        { code: "TERMS_REQUIRED" }
+      );
+    }
     const validRole = role === "researcher" ? "researcher" : "respondent";
-    user = await User.create({ email: normalizedEmail, role: validRole });
+    user = await User.create({
+      email: normalizedEmail,
+      role: validRole,
+      termsAcceptedAt: new Date(),
+      termsVersion: CURRENT_TERMS_VERSION,
+    });
     await Wallet.create({ userId: user._id });
     const emailProvider = getEmailProvider();
     await emailProvider.send({

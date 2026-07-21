@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import config from "../config";
 import { User, IUser } from "../modules/users/user.model";
 import { AppError } from "../utils/errors";
+import { needsTermsAcceptance } from "../constants/legal";
 
 declare global {
   namespace Express {
@@ -34,7 +35,8 @@ export const requireAuth = async (req: Request, _res: Response, next: NextFuncti
     }
     req.user = user;
     next();
-  } catch {
+  } catch (err) {
+    if (err instanceof AppError) return next(err);
     next(new AppError("Invalid or expired token", 401));
   }
 };
@@ -47,6 +49,17 @@ export const requireRole =
     }
     next();
   };
+
+export const requireTermsAccepted = (req: Request, _res: Response, next: NextFunction) => {
+  if (needsTermsAcceptance(req.user?.termsVersion)) {
+    return next(
+      new AppError("You must accept the Terms of Service and Privacy Policy to continue", 403, {
+        code: "TERMS_REQUIRED",
+      })
+    );
+  }
+  next();
+};
 
 export const requireNinVerified = (req: Request, _res: Response, next: NextFunction) => {
   if (!req.user?.ninVerified) {

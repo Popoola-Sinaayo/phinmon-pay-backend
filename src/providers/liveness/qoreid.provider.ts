@@ -47,7 +47,7 @@ export class QoreIdLivenessProvider implements LivenessProvider {
       sessionId: session.sessionId,
       sdkSessionToken: session.sdkSessionToken,
       customerReference: reference,
-      idNumber: options.idNumber,
+      // Raw NIN is used server-side only; never returned to the browser.
     };
   }
 

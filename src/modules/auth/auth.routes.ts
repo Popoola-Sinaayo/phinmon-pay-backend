@@ -21,10 +21,15 @@ router.post(
     Joi.object({
       email: Joi.string().email().required(),
       role: Joi.string().valid("respondent", "researcher").optional(),
+      acceptedTermsVersion: Joi.string().optional(),
     })
   ),
   asyncHandler(async (req, res) => {
-    const result = await authService.requestOtp(req.body.email, req.body.role);
+    const result = await authService.requestOtp(
+      req.body.email,
+      req.body.role,
+      req.body.acceptedTermsVersion
+    );
     res.json({ success: true, ...result });
   })
 );

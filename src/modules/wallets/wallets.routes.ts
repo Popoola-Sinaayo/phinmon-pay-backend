@@ -2,7 +2,7 @@ import { Router } from "express";
 import Joi from "joi";
 import { asyncHandler } from "../../middleware/errorHandler";
 import { validate } from "../../middleware/validate";
-import { requireAuth, requireRole, requireNinVerified } from "../../middleware/auth";
+import { requireAuth, requireRole, requireNinVerified, requireTermsAccepted } from "../../middleware/auth";
 import * as walletsService from "./wallets.service";
 
 const router = Router();
@@ -10,6 +10,7 @@ const router = Router();
 router.get(
   "/",
   requireAuth,
+  requireTermsAccepted,
   asyncHandler(async (req, res) => {
     const wallet = await walletsService.getWallet(req.user!._id.toString());
     res.json({ success: true, wallet });
@@ -19,6 +20,7 @@ router.get(
 router.get(
   "/dashboard",
   requireAuth,
+  requireTermsAccepted,
   requireRole("respondent", "admin"),
   asyncHandler(async (req, res) => {
     const dashboard = await walletsService.getRespondentDashboard(req.user!._id.toString());
@@ -29,6 +31,7 @@ router.get(
 router.get(
   "/transactions",
   requireAuth,
+  requireTermsAccepted,
   asyncHandler(async (req, res) => {
     const transactions = await walletsService.getTransactions(req.user!._id.toString());
     res.json({ success: true, transactions });
@@ -46,6 +49,7 @@ router.get(
 router.post(
   "/resolve-account",
   requireAuth,
+  requireTermsAccepted,
   requireNinVerified,
   validate(
     Joi.object({
@@ -65,6 +69,7 @@ router.post(
 router.post(
   "/bank-accounts",
   requireAuth,
+  requireTermsAccepted,
   requireNinVerified,
   validate(
     Joi.object({
@@ -82,6 +87,7 @@ router.post(
 router.get(
   "/bank-accounts",
   requireAuth,
+  requireTermsAccepted,
   asyncHandler(async (req, res) => {
     const accounts = await walletsService.getBankAccounts(req.user!._id.toString());
     res.json({ success: true, accounts });
@@ -91,6 +97,7 @@ router.get(
 router.get(
   "/withdrawals/:id",
   requireAuth,
+  requireTermsAccepted,
   requireRole("respondent", "admin"),
   asyncHandler(async (req, res) => {
     const result = await walletsService.getWithdrawalStatus(
@@ -104,6 +111,7 @@ router.get(
 router.post(
   "/withdrawals",
   requireAuth,
+  requireTermsAccepted,
   requireRole("respondent", "admin"),
   requireNinVerified,
   validate(

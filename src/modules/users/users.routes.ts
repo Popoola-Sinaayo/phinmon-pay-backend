@@ -2,14 +2,38 @@ import { Router } from "express";
 import Joi from "joi";
 import { asyncHandler } from "../../middleware/errorHandler";
 import { validate } from "../../middleware/validate";
-import { requireAuth } from "../../middleware/auth";
+import { requireAuth, requireTermsAccepted } from "../../middleware/auth";
 import * as usersService from "./users.service";
+import { CURRENT_TERMS_VERSION } from "../../constants/legal";
 
 const router = Router();
 
 router.post(
-  "/onboarding",
+  "/accept-terms",
   requireAuth,
+  validate(
+    Joi.object({
+      version: Joi.string().valid(CURRENT_TERMS_VERSION).required(),
+    })
+  ),
+  asyncHandler(async (req, res) => {
+    const result = await usersService.acceptTerms(req.user!._id.toString(), req.body.version);
+    res.json({ success: true, ...result });
+  })
+);
+
+router.use(requireAuth, requireTermsAccepted);
+
+router.post(
+  "/deletion-request",
+  asyncHandler(async (req, res) => {
+    const result = await usersService.requestAccountDeletion(req.user!._id.toString());
+    res.json({ success: true, ...result });
+  })
+);
+
+router.post(
+  "/onboarding",
   validate(
     Joi.object({
       name: Joi.string().min(2).required(),
@@ -27,7 +51,6 @@ router.post(
 
 router.get(
   "/profile",
-  requireAuth,
   asyncHandler(async (req, res) => {
     const result = await usersService.getProfile(req.user!._id.toString());
     res.json({ success: true, ...result });
@@ -36,7 +59,6 @@ router.get(
 
 router.patch(
   "/profile",
-  requireAuth,
   validate(
     Joi.object({
       name: Joi.string().min(2).optional(),
@@ -60,7 +82,6 @@ const pinSchema = Joi.object({
 
 router.get(
   "/withdrawal-pin/status",
-  requireAuth,
   asyncHandler(async (req, res) => {
     const status = await usersService.getWithdrawalPinStatus(req.user!._id.toString());
     res.json({ success: true, ...status });
@@ -69,7 +90,6 @@ router.get(
 
 router.post(
   "/withdrawal-pin",
-  requireAuth,
   validate(pinSchema),
   asyncHandler(async (req, res) => {
     const result = await usersService.setWithdrawalPin(req.user!._id.toString(), req.body);

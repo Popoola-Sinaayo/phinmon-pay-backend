@@ -79,6 +79,13 @@ export const startSurvey = async (user: IUser, surveyId: string) => {
   if (user.status === "SUSPENDED") {
     throw new AppError("Your account has been suspended", 403, { code: "ACCOUNT_SUSPENDED" });
   }
+  if (user.deletionRequestedAt) {
+    throw new AppError(
+      "Account deletion is pending. You cannot start new studies until the request is resolved.",
+      403,
+      { code: "DELETION_PENDING" }
+    );
+  }
   if (!user.ninVerified) throw new AppError("NIN verification required", 403);
 
   const survey = await Survey.findById(surveyId);

@@ -410,19 +410,34 @@ export const exportSurveyResponses = async (researcherId: string, surveyId: stri
   const survey = await Survey.findOne({ _id: surveyId, researcherId });
   if (!survey) throw new AppError("Survey not found", 404);
 
-  const responses = await SurveyResponse.find({ surveyId }).populate("userId", "name email");
+  const responses = await SurveyResponse.find({ surveyId }).populate(
+    "userId",
+    "ninVerified livenessVerified"
+  );
 
-  const headers = ["responseId", "userId", "userName", "userEmail", "status", "rewardAmount", "createdAt"];
+  const headers = [
+    "responseId",
+    "userId",
+    "ninVerified",
+    "livenessVerified",
+    "status",
+    "rewardAmount",
+    "createdAt",
+  ];
   const questionHeaders = survey.questions.map((q) => q.questionId);
   const allHeaders = [...headers, ...questionHeaders];
 
   const rows = responses.map((r) => {
-    const user = r.userId as unknown as { name?: string; email?: string; _id: string };
+    const user = r.userId as unknown as {
+      ninVerified?: boolean;
+      livenessVerified?: boolean;
+      _id: string;
+    };
     const row: Record<string, unknown> = {
       responseId: r._id.toString(),
       userId: user._id?.toString() || r.userId.toString(),
-      userName: user.name || "",
-      userEmail: user.email || "",
+      ninVerified: Boolean(user.ninVerified),
+      livenessVerified: Boolean(user.livenessVerified),
       status: r.status,
       rewardAmount: r.rewardAmount,
       createdAt: r.createdAt.toISOString(),

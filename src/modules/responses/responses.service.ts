@@ -293,7 +293,7 @@ export const getSurveyResponses = async (researcherId: string, surveyId: string)
   if (!survey) throw new AppError("Survey not found", 404);
 
   const responses = await SurveyResponse.find({ surveyId })
-    .populate("userId", "name email ninVerified livenessVerified")
+    .populate("userId", "ninVerified livenessVerified")
     .sort({ createdAt: -1 });
 
   const completionPercent =
@@ -307,7 +307,7 @@ export const getSurveyResponses = async (researcherId: string, surveyId: string)
 export const getResponseById = async (responseId: string, researcherId?: string) => {
   const response = await SurveyResponse.findById(responseId).populate(
     "userId",
-    "name email ninVerified livenessVerified"
+    "ninVerified livenessVerified"
   );
   if (!response) throw new AppError("Response not found", 404);
 

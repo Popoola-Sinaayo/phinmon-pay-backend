@@ -2,15 +2,16 @@ import { Router } from "express";
 import Joi from "joi";
 import { asyncHandler } from "../../middleware/errorHandler";
 import { validate } from "../../middleware/validate";
-import { requireAuth, requireRole, requireNinVerified } from "../../middleware/auth";
+import { requireAuth, requireRole, requireNinVerified, requireTermsAccepted } from "../../middleware/auth";
 import * as responsesService from "./responses.service";
 import * as reservationService from "./reservation.service";
 
 const router = Router();
 
+router.use(requireAuth, requireTermsAccepted);
+
 router.post(
   "/surveys/:surveyId/start",
-  requireAuth,
   requireRole("respondent", "admin"),
   requireNinVerified,
   asyncHandler(async (req, res) => {
@@ -24,7 +25,6 @@ router.post(
 
 router.post(
   "/surveys/:surveyId/release",
-  requireAuth,
   requireRole("respondent", "admin"),
   asyncHandler(async (req, res) => {
     const result = await reservationService.releaseReservation(
@@ -37,7 +37,6 @@ router.post(
 
 router.post(
   "/surveys/:surveyId/responses",
-  requireAuth,
   requireRole("respondent", "admin"),
   requireNinVerified,
   validate(
@@ -65,7 +64,6 @@ router.post(
 
 router.get(
   "/surveys/:surveyId/responses",
-  requireAuth,
   requireRole("researcher", "admin"),
   asyncHandler(async (req, res) => {
     const result = await responsesService.getSurveyResponses(
@@ -78,7 +76,6 @@ router.get(
 
 router.get(
   "/:id",
-  requireAuth,
   requireRole("researcher", "admin"),
   asyncHandler(async (req, res) => {
     const response = await responsesService.getResponseById(
@@ -91,7 +88,6 @@ router.get(
 
 router.patch(
   "/:id/status",
-  requireAuth,
   requireRole("researcher", "admin"),
   validate(Joi.object({ status: Joi.string().valid("APPROVED", "REJECTED").required() })),
   asyncHandler(async (req, res) => {
@@ -106,7 +102,6 @@ router.patch(
 
 router.post(
   "/:id/flag",
-  requireAuth,
   requireRole("researcher", "admin"),
   validate(Joi.object({ reason: Joi.string().max(500).optional() })),
   asyncHandler(async (req, res) => {
