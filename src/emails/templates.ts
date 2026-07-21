@@ -3,6 +3,7 @@ import {
   formatNaira,
   renderCtaButton,
   renderEmailLayout,
+  renderPremiumBroadcastEmail,
   renderStatRow,
 } from "./layout";
 
@@ -113,9 +114,16 @@ export type PlatformReminderParams = {
   template: "use_platform" | "complete_verification" | "custom";
   customSubject?: string;
   customMessage?: string;
+  customHeadline?: string;
+  ctaLabel?: string;
   dashboardUrl: string;
   verifyUrl: string;
 };
+
+const formatMessageHtml = (message: string): string =>
+  escapeHtml(message)
+    .replace(/\n\n+/g, "</p><p style=\"margin:16px 0 0 0;\">")
+    .replace(/\n/g, "<br/>");
 
 export const platformReminderEmailTemplate = (
   params: PlatformReminderParams
@@ -152,19 +160,20 @@ export const platformReminderEmailTemplate = (
 
   if (params.template === "custom") {
     const subject = (params.customSubject || "A message from Phinmon").trim();
-    const message = escapeHtml(params.customMessage || "").replace(/\n/g, "<br/>");
-    const bodyHtml = `
-      <p style="margin:0 0 4px 0;font-size:15px;color:#5c6370;">${greeting}</p>
-      <h1 style="margin:0 0 12px 0;font-size:24px;font-weight:700;color:#1a1a1a;line-height:1.3;">${escapeHtml(subject)}</h1>
-      <p style="margin:0 0 16px 0;font-size:16px;line-height:26px;color:#5c6370;">${message}</p>
-      ${renderCtaButton(params.dashboardUrl, "Open Phinmon")}`;
+    const headline = (params.customHeadline || subject).trim();
+    const messageHtml = `<p style="margin:0;">${formatMessageHtml(params.customMessage || "")}</p>`;
+    const ctaLabel = params.ctaLabel?.trim() || "Open Phinmon";
 
     return {
       subject,
-      html: renderEmailLayout({
+      html: renderPremiumBroadcastEmail({
         preheader: subject,
         title: subject,
-        bodyHtml,
+        recipientName: params.recipientName,
+        headline,
+        messageHtml,
+        ctaHref: params.dashboardUrl,
+        ctaLabel,
       }),
     };
   }

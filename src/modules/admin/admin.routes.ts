@@ -16,6 +16,26 @@ const parseOptionalBoolean = (value: unknown): boolean | undefined => {
   return undefined;
 };
 
+const emailAudienceSchema = Joi.string().valid(
+  "all",
+  "unverified",
+  "verified",
+  "pending_verification",
+  "respondents",
+  "researchers",
+  "premium",
+  "specific_users",
+  "signed_up_since"
+);
+
+const parseUserIds = (value: unknown): string[] | undefined => {
+  if (Array.isArray(value)) return value.map(String);
+  if (typeof value === "string" && value.trim()) {
+    return value.split(",").map((id) => id.trim()).filter(Boolean);
+  }
+  return undefined;
+};
+
 router.get(
   "/stats",
   asyncHandler(async (_req, res) => {
@@ -114,10 +134,25 @@ router.get(
 );
 
 router.get(
+  "/emails/history",
+  asyncHandler(async (req, res) => {
+    const page = parseInt(req.query.page as string) || 1;
+    const result = await adminService.listEmailCampaigns(page);
+    res.json({ success: true, ...result });
+  })
+);
+
+router.get(
   "/emails/preview",
   asyncHandler(async (req, res) => {
     const audience = (req.query.audience as adminService.EmailAudience) || "all";
-    const preview = await adminService.previewEmailAudience(audience);
+    const userIds = parseUserIds(req.query.userIds);
+    const signedUpSince = (req.query.signedUpSince as string) || undefined;
+    const preview = await adminService.previewEmailAudience({
+      audience,
+      userIds,
+      signedUpSince,
+    });
     res.json({ success: true, ...preview });
   })
 );
@@ -126,17 +161,17 @@ router.post(
   "/emails/send",
   validate(
     Joi.object({
-      audience: Joi.string()
-        .valid(
-          "all",
-          "unverified",
-          "verified",
-          "pending_verification",
-          "respondents",
-          "researchers",
-          "premium"
-        )
-        .required(),
+      audience: emailAudienceSchema.required(),
+      userIds: Joi.array().items(Joi.string()).when("audience", {
+        is: "specific_users",
+        then: Joi.array().min(1).required(),
+        otherwise: Joi.optional(),
+      }),
+      signedUpSince: Joi.string().isoDate().when("audience", {
+        is: "signed_up_since",
+        then: Joi.required(),
+        otherwise: Joi.optional().allow("", null),
+      }),
       template: Joi.string()
         .valid("use_platform", "complete_verification", "custom")
         .required(),
@@ -145,19 +180,25 @@ router.post(
         then: Joi.required(),
         otherwise: Joi.optional().allow("", null),
       }),
+      headline: Joi.string().max(200).optional().allow("", null),
       message: Joi.string().max(5000).when("template", {
         is: "custom",
         then: Joi.required(),
         otherwise: Joi.optional().allow("", null),
       }),
+      ctaLabel: Joi.string().max(80).optional().allow("", null),
     })
   ),
   asyncHandler(async (req, res) => {
     const result = await adminService.sendBulkReminderEmail({
       audience: req.body.audience,
+      userIds: req.body.userIds,
+      signedUpSince: req.body.signedUpSince,
       template: req.body.template,
       subject: req.body.subject,
+      headline: req.body.headline,
       message: req.body.message,
+      ctaLabel: req.body.ctaLabel,
       adminUserId: req.user!._id.toString(),
     });
     res.json({ success: true, ...result });

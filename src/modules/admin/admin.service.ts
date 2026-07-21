@@ -11,6 +11,7 @@ import { Transaction } from "../wallets/transaction.model";
 import { Withdrawal } from "../wallets/withdrawal.model";
 import { FraudFlag } from "./fraudFlag.model";
 import { logAudit } from "./auditLog.model";
+import { AdminEmailCampaign } from "./adminEmailCampaign.model";
 
 const log = createLogger("Admin");
 const EMAIL_BATCH_SIZE = 15;
@@ -32,9 +33,17 @@ export type EmailAudience =
   | "pending_verification"
   | "respondents"
   | "researchers"
-  | "premium";
+  | "premium"
+  | "specific_users"
+  | "signed_up_since";
 
 export type ReminderTemplate = "use_platform" | "complete_verification" | "custom";
+
+export type EmailTargetParams = {
+  audience: EmailAudience;
+  userIds?: string[];
+  signedUpSince?: string;
+};
 
 const daysAgo = (days: number) => {
   const d = new Date();
@@ -272,10 +281,33 @@ export const getAdminStats = async () => {
   };
 };
 
-const audienceQuery = (audience: EmailAudience): FilterQuery<IUser> => {
+const audienceQuery = (params: EmailTargetParams): FilterQuery<IUser> => {
   const base: FilterQuery<IUser> = { status: { $ne: "SUSPENDED" }, role: { $ne: "admin" } };
 
-  switch (audience) {
+  if (params.audience === "specific_users") {
+    const ids = (params.userIds || []).filter(Boolean);
+    if (ids.length === 0) {
+      throw new AppError("Select at least one user", 400);
+    }
+    return {
+      ...base,
+      _id: { $in: ids.map((id) => new mongoose.Types.ObjectId(id)) },
+    };
+  }
+
+  if (params.audience === "signed_up_since") {
+    if (!params.signedUpSince) {
+      throw new AppError("Select a start date for signups", 400);
+    }
+    const since = new Date(params.signedUpSince);
+    if (Number.isNaN(since.getTime())) {
+      throw new AppError("Invalid signup date", 400);
+    }
+    since.setUTCHours(0, 0, 0, 0);
+    return { ...base, createdAt: { $gte: since } };
+  }
+
+  switch (params.audience) {
     case "all":
       return base;
     case "unverified":
@@ -295,8 +327,18 @@ const audienceQuery = (audience: EmailAudience): FilterQuery<IUser> => {
   }
 };
 
-const audienceLabel = (audience: EmailAudience): string => {
-  const labels: Record<EmailAudience, string> = {
+const audienceLabel = (params: EmailTargetParams, count?: number): string => {
+  if (params.audience === "specific_users") {
+    return `${count ?? params.userIds?.length ?? 0} selected user(s)`;
+  }
+  if (params.audience === "signed_up_since" && params.signedUpSince) {
+    const d = new Date(params.signedUpSince);
+    const formatted = Number.isNaN(d.getTime())
+      ? params.signedUpSince
+      : d.toLocaleDateString("en-NG", { dateStyle: "medium" });
+    return `users who signed up since ${formatted}`;
+  }
+  const labels: Record<Exclude<EmailAudience, "specific_users" | "signed_up_since">, string> = {
     all: "all users",
     unverified: "unverified users",
     verified: "verified users",
@@ -305,44 +347,85 @@ const audienceLabel = (audience: EmailAudience): string => {
     researchers: "researchers",
     premium: "premium users",
   };
-  return labels[audience];
+  return labels[params.audience as Exclude<EmailAudience, "specific_users" | "signed_up_since">];
 };
 
-export const previewEmailAudience = async (audience: EmailAudience) => {
-  const query = audienceQuery(audience);
+export const previewEmailAudience = async (params: EmailTargetParams) => {
+  const query = audienceQuery(params);
   const count = await User.countDocuments(query);
-  return { audience, label: audienceLabel(audience), count };
+  return {
+    audience: params.audience,
+    label: audienceLabel(params, count),
+    count,
+    signedUpSince: params.signedUpSince,
+    userIds: params.userIds,
+  };
+};
+
+export const listEmailCampaigns = async (page = 1, limit = 20) => {
+  const skip = (page - 1) * limit;
+  const [campaigns, total] = await Promise.all([
+    AdminEmailCampaign.find()
+      .populate("sentBy", "name email")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    AdminEmailCampaign.countDocuments(),
+  ]);
+  return {
+    campaigns,
+    total,
+    page,
+    limit,
+    totalPages: Math.max(1, Math.ceil(total / limit)),
+  };
 };
 
 export const sendBulkReminderEmail = async (params: {
   audience: EmailAudience;
+  userIds?: string[];
+  signedUpSince?: string;
   template: ReminderTemplate;
   subject?: string;
   message?: string;
+  headline?: string;
+  ctaLabel?: string;
   adminUserId?: string;
 }) => {
-  const { audience, template } = params;
-  const query = audienceQuery(audience);
-  const users = await User.find(query).select("email name");
+  const target: EmailTargetParams = {
+    audience: params.audience,
+    userIds: params.userIds,
+    signedUpSince: params.signedUpSince,
+  };
+  const query = audienceQuery(target);
+  const users = await User.find(query).select("email name _id");
 
   if (users.length === 0) {
     throw new AppError("No recipients match this audience", 400);
   }
 
-  if (template === "custom" && (!params.subject?.trim() || !params.message?.trim())) {
+  if (params.template === "custom" && (!params.subject?.trim() || !params.message?.trim())) {
     throw new AppError("Custom emails require a subject and message", 400);
   }
 
   const dashboardUrl = `${config().FRONTEND_URL}/dashboard`;
   const verifyUrl = `${config().FRONTEND_URL}/verification`;
   const emailProvider = getEmailProvider();
+  const label = audienceLabel(target, users.length);
+  const subjectForLog =
+    params.template === "custom"
+      ? (params.subject || "Custom message").trim()
+      : params.template === "complete_verification"
+        ? "Complete your Phinmon verification"
+        : "Reminder: use Phinmon today";
 
   let sent = 0;
   let failed = 0;
 
   log.info("Starting admin bulk email", {
-    audience,
-    template,
+    audience: params.audience,
+    template: params.template,
     recipientCount: users.length,
   });
 
@@ -352,9 +435,11 @@ export const sendBulkReminderEmail = async (params: {
       batch.map(async (user) => {
         const { subject, html } = platformReminderEmailTemplate({
           recipientName: user.name,
-          template,
+          template: params.template,
           customSubject: params.subject,
           customMessage: params.message,
+          customHeadline: params.headline,
+          ctaLabel: params.ctaLabel,
           dashboardUrl,
           verifyUrl,
         });
@@ -373,22 +458,59 @@ export const sendBulkReminderEmail = async (params: {
     }
   }
 
+  const status = sent === 0 ? "failed" : failed > 0 ? "partial" : "completed";
+
+  const campaign = await AdminEmailCampaign.create({
+    sentBy: params.adminUserId,
+    audience: params.audience,
+    audienceLabel: label,
+    template: params.template,
+    subject: subjectForLog,
+    messagePreview: params.message?.trim().slice(0, 280),
+    headline: params.headline?.trim(),
+    userIds:
+      params.audience === "specific_users" ? users.map((u) => u._id) : undefined,
+    signedUpSince:
+      params.audience === "signed_up_since" && params.signedUpSince
+        ? new Date(params.signedUpSince)
+        : undefined,
+    totalRecipients: users.length,
+    sent,
+    failed,
+    status,
+  });
+
   if (params.adminUserId) {
     await logAudit({
       userId: new mongoose.Types.ObjectId(params.adminUserId),
       action: "BULK_EMAIL_SENT",
-      resource: "users",
-      metadata: { audience, template, sent, failed, total: users.length },
+      resource: "admin_email_campaign",
+      resourceId: campaign._id.toString(),
+      metadata: {
+        audience: params.audience,
+        template: params.template,
+        sent,
+        failed,
+        total: users.length,
+      },
     });
   }
 
-  log.info("Admin bulk email complete", { audience, template, sent, failed, total: users.length });
+  log.info("Admin bulk email complete", {
+    audience: params.audience,
+    template: params.template,
+    sent,
+    failed,
+    total: users.length,
+  });
 
   return {
-    audience,
-    label: audienceLabel(audience),
+    campaignId: campaign._id.toString(),
+    audience: params.audience,
+    label,
     total: users.length,
     sent,
     failed,
+    status,
   };
 };

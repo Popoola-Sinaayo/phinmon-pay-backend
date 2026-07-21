@@ -131,6 +131,75 @@ export const renderStatRow = (
   </table>`;
 };
 
+export type PremiumEmailOptions = {
+  preheader: string;
+  title: string;
+  recipientName?: string;
+  headline: string;
+  messageHtml: string;
+  ctaHref?: string;
+  ctaLabel?: string;
+  footerNote?: string;
+};
+
+/** Editorial layout for admin broadcasts — gradient hero, accent message card, signature. */
+export const renderPremiumBroadcastEmail = (options: PremiumEmailOptions): string => {
+  const greeting = options.recipientName
+    ? `Hi ${escapeHtml(options.recipientName)},`
+    : "Hi there,";
+  const ctaBlock =
+    options.ctaHref && options.ctaLabel
+      ? `
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:32px auto 0 auto;">
+    <tr>
+      <td align="center" style="border-radius:12px;background-color:${BRAND.primary};box-shadow:0 8px 24px rgba(16,122,76,0.28);">
+        <a href="${escapeAttr(options.ctaHref)}" class="cta-button" style="display:inline-block;padding:16px 36px;font-size:16px;font-weight:700;color:${BRAND.white};text-decoration:none;border-radius:12px;letter-spacing:0.2px;">${escapeHtml(options.ctaLabel)}</a>
+      </td>
+    </tr>
+  </table>`
+      : "";
+
+  const bodyHtml = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+      <tr>
+        <td style="background:linear-gradient(135deg,${BRAND.primary} 0%,${BRAND.primaryDark} 100%);background-color:${BRAND.primary};border-radius:14px 14px 0 0;padding:28px 32px 32px 32px;">
+          <p style="margin:0 0 10px 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:rgba(255,255,255,0.82);">Message from Phinmon</p>
+          <h1 style="margin:0;font-size:28px;font-weight:800;color:${BRAND.white};line-height:1.25;letter-spacing:-0.5px;">${escapeHtml(options.headline)}</h1>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:32px 32px 8px 32px;">
+          <p style="margin:0 0 20px 0;font-size:15px;line-height:24px;color:${BRAND.textMuted};">${greeting}</p>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td style="background-color:#f8fbf9;border:1px solid #dceee3;border-left:4px solid ${BRAND.primary};border-radius:12px;padding:22px 24px;">
+                <div style="font-size:16px;line-height:28px;color:${BRAND.text};">${options.messageHtml}</div>
+              </td>
+            </tr>
+          </table>
+          ${ctaBlock}
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:36px;">
+            <tr>
+              <td style="border-top:1px solid ${BRAND.border};padding-top:24px;">
+                <p style="margin:0 0 4px 0;font-size:14px;font-weight:600;color:${BRAND.text};">The Phinmon team</p>
+                <p style="margin:0;font-size:13px;line-height:20px;color:${BRAND.textMuted};">Nigeria&apos;s verified insights marketplace</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>`;
+
+  return renderEmailLayout({
+    preheader: options.preheader,
+    title: options.title,
+    bodyHtml,
+    footerNote:
+      options.footerNote ||
+      "You're receiving this because you have a Phinmon account. We only email you about the platform.",
+  });
+};
+
 const escapeHtml = (value: string): string =>
   value
     .replace(/&/g, "&amp;")
