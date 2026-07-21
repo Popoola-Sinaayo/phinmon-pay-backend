@@ -297,13 +297,12 @@ const audienceQuery = (params: EmailTargetParams): FilterQuery<IUser> => {
 
   if (params.audience === "signed_up_since") {
     if (!params.signedUpSince) {
-      throw new AppError("Select a start date for signups", 400);
+      throw new AppError("Select a start date and time for signups", 400);
     }
     const since = new Date(params.signedUpSince);
     if (Number.isNaN(since.getTime())) {
-      throw new AppError("Invalid signup date", 400);
+      throw new AppError("Invalid signup date and time", 400);
     }
-    since.setUTCHours(0, 0, 0, 0);
     return { ...base, createdAt: { $gte: since } };
   }
 
@@ -335,7 +334,7 @@ const audienceLabel = (params: EmailTargetParams, count?: number): string => {
     const d = new Date(params.signedUpSince);
     const formatted = Number.isNaN(d.getTime())
       ? params.signedUpSince
-      : d.toLocaleDateString("en-NG", { dateStyle: "medium" });
+      : d.toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" });
     return `users who signed up since ${formatted}`;
   }
   const labels: Record<Exclude<EmailAudience, "specific_users" | "signed_up_since">, string> = {

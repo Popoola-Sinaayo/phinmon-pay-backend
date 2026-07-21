@@ -167,7 +167,7 @@ router.post(
         then: Joi.array().min(1).required(),
         otherwise: Joi.optional(),
       }),
-      signedUpSince: Joi.string().isoDate().when("audience", {
+      signedUpSince: Joi.string().when("audience", {
         is: "signed_up_since",
         then: Joi.required(),
         otherwise: Joi.optional().allow("", null),
