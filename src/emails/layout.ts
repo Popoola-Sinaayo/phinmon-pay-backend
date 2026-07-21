@@ -142,7 +142,7 @@ export type PremiumEmailOptions = {
   footerNote?: string;
 };
 
-/** Full-width broadcast layout — no nested card squeeze; tuned for mobile + desktop clients. */
+/** Edge-to-edge broadcast — one padding layer, 100% width, no nested message box. */
 export const renderPremiumBroadcastEmail = (options: PremiumEmailOptions): string => {
   const greeting = options.recipientName
     ? `Hi ${escapeHtml(options.recipientName)},`
@@ -154,13 +154,13 @@ export const renderPremiumBroadcastEmail = (options: PremiumEmailOptions): strin
   const ctaBlock =
     options.ctaHref && options.ctaLabel
       ? `
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:40px 0 0 0;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:32px 0 0 0;">
             <tr>
-              <td align="center">
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <td align="center" style="padding:0;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                   <tr>
-                    <td align="center" bgcolor="${BRAND.primary}" style="background-color:${BRAND.primary};border-radius:14px;">
-                      <a href="${escapeAttr(options.ctaHref)}" class="cta-button" style="display:inline-block;padding:18px 48px;font-size:18px;font-weight:700;color:${BRAND.white};text-decoration:none;border-radius:14px;line-height:1.2;min-width:200px;text-align:center;">${escapeHtml(options.ctaLabel)}</a>
+                    <td align="center" bgcolor="${BRAND.primary}" style="background-color:${BRAND.primary};border-radius:12px;">
+                      <a href="${escapeAttr(options.ctaHref)}" class="broadcast-cta" style="display:block;width:100%;padding:18px 24px;font-size:18px;font-weight:700;color:${BRAND.white};text-decoration:none;border-radius:12px;line-height:1.3;text-align:center;box-sizing:border-box;">${escapeHtml(options.ctaLabel)}</a>
                     </td>
                   </tr>
                 </table>
@@ -188,66 +188,48 @@ export const renderPremiumBroadcastEmail = (options: PremiumEmailOptions): strin
   </noscript>
   <![endif]-->
   <style>
-    @media only screen and (max-width: 680px) {
-      .broadcast-container { width: 100% !important; max-width: 100% !important; }
-      .broadcast-hero { padding: 40px 28px !important; }
-      .broadcast-body { padding: 36px 24px 40px 24px !important; }
-      .broadcast-headline { font-size: 30px !important; line-height: 1.25 !important; }
-      .broadcast-message { padding: 28px 24px !important; font-size: 17px !important; line-height: 1.65 !important; }
-      .cta-button { display: block !important; width: 100% !important; box-sizing: border-box !important; padding: 18px 24px !important; }
+    body, table, td { margin: 0; padding: 0; }
+    img { border: 0; outline: none; }
+    @media only screen and (max-width: 620px) {
+      .broadcast-shell { width: 100% !important; max-width: 100% !important; }
+      .broadcast-pad { padding-left: 20px !important; padding-right: 20px !important; }
+      .broadcast-headline { font-size: 28px !important; }
     }
   </style>
 </head>
-<body style="margin:0;padding:0;background-color:${BRAND.background};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+<body style="margin:0;padding:0;width:100%;background-color:${BRAND.white};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%;">
   <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">${escapeHtml(options.preheader)}&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;</div>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:${BRAND.background};">
+  <table role="presentation" class="broadcast-shell" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:100%;background-color:${BRAND.white};">
+    <!-- Hero: full bleed -->
     <tr>
-      <td align="center" style="padding:40px 20px;">
-        <table role="presentation" class="broadcast-container" width="640" cellpadding="0" cellspacing="0" border="0" style="max-width:640px;width:100%;">
-          <!-- Hero -->
+      <td class="broadcast-pad" bgcolor="${BRAND.primary}" style="background-color:${BRAND.primary};background:linear-gradient(135deg,${BRAND.primary} 0%,${BRAND.primaryDark} 100%);padding:36px 28px 40px 28px;">
+        <p style="margin:0 0 8px 0;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:rgba(255,255,255,0.85);">Phinmon</p>
+        <h1 class="broadcast-headline" style="margin:0;font-size:32px;font-weight:800;color:${BRAND.white};line-height:1.2;letter-spacing:-0.4px;">${escapeHtml(options.headline)}</h1>
+      </td>
+    </tr>
+    <!-- Body: single padding layer, message runs full width -->
+    <tr>
+      <td class="broadcast-pad" style="background-color:${BRAND.white};padding:32px 28px 36px 28px;">
+        <p style="margin:0 0 24px 0;font-size:17px;line-height:26px;color:${BRAND.textMuted};">${greeting}</p>
+        <div style="font-size:17px;line-height:28px;color:${BRAND.text};">
+          ${options.messageHtml}
+        </div>
+        ${ctaBlock}
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:36px;">
           <tr>
-            <td class="broadcast-hero" bgcolor="${BRAND.primary}" style="background-color:${BRAND.primary};background:linear-gradient(135deg,${BRAND.primary} 0%,${BRAND.primaryDark} 100%);border-radius:20px 20px 0 0;padding:48px 48px 52px 48px;">
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-                <tr>
-                  <td>
-                    <p style="margin:0 0 16px 0;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:rgba(255,255,255,0.88);">Phinmon</p>
-                    <p style="margin:0 0 12px 0;font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,0.75);">Message for you</p>
-                    <h1 class="broadcast-headline" style="margin:0;font-size:36px;font-weight:800;color:${BRAND.white};line-height:1.2;letter-spacing:-0.6px;">${escapeHtml(options.headline)}</h1>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-          <!-- Body -->
-          <tr>
-            <td class="broadcast-body" style="background-color:${BRAND.white};border-radius:0 0 20px 20px;border:1px solid ${BRAND.border};border-top:none;padding:44px 48px 48px 48px;">
-              <p style="margin:0 0 28px 0;font-size:18px;line-height:28px;color:${BRAND.textMuted};">${greeting}</p>
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-                <tr>
-                  <td class="broadcast-message" bgcolor="#f8fbf9" style="background-color:#f8fbf9;border:1px solid #dceee3;border-left:5px solid ${BRAND.primary};border-radius:16px;padding:32px 36px;font-size:18px;line-height:32px;color:${BRAND.text};">
-                    ${options.messageHtml}
-                  </td>
-                </tr>
-              </table>
-              ${ctaBlock}
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:44px;">
-                <tr>
-                  <td style="border-top:1px solid ${BRAND.border};padding-top:28px;">
-                    <p style="margin:0 0 6px 0;font-size:16px;font-weight:700;color:${BRAND.text};">The Phinmon team</p>
-                    <p style="margin:0;font-size:15px;line-height:24px;color:${BRAND.textMuted};">Nigeria&apos;s verified insights marketplace</p>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-          <!-- Footer -->
-          <tr>
-            <td style="padding:28px 16px 0 16px;text-align:center;">
-              <p style="margin:0 0 10px 0;font-size:14px;line-height:22px;color:${BRAND.textMuted};">${footerNote}</p>
-              <p style="margin:0;font-size:13px;line-height:20px;color:#9ca3af;">&copy; ${new Date().getFullYear()} ${BRAND.name}. Earn from verified surveys.</p>
+            <td style="border-top:1px solid ${BRAND.border};padding-top:24px;">
+              <p style="margin:0 0 4px 0;font-size:15px;font-weight:700;color:${BRAND.text};">The Phinmon team</p>
+              <p style="margin:0;font-size:14px;line-height:22px;color:${BRAND.textMuted};">Nigeria&apos;s verified insights marketplace</p>
             </td>
           </tr>
         </table>
+      </td>
+    </tr>
+    <!-- Footer -->
+    <tr>
+      <td class="broadcast-pad" bgcolor="${BRAND.background}" style="background-color:${BRAND.background};padding:24px 28px 32px 28px;text-align:center;">
+        <p style="margin:0 0 8px 0;font-size:13px;line-height:20px;color:${BRAND.textMuted};">${footerNote}</p>
+        <p style="margin:0;font-size:12px;line-height:18px;color:#9ca3af;">&copy; ${new Date().getFullYear()} ${BRAND.name}</p>
       </td>
     </tr>
   </table>

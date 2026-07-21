@@ -122,7 +122,7 @@ export type PlatformReminderParams = {
 
 const formatMessageHtml = (message: string): string =>
   escapeHtml(message)
-    .replace(/\n\n+/g, "</p><p style=\"margin:20px 0 0 0;font-size:18px;line-height:32px;\">")
+    .replace(/\n\n+/g, "</p><p style=\"margin:18px 0 0 0;font-size:17px;line-height:28px;\">")
     .replace(/\n/g, "<br/>");
 
 export const platformReminderEmailTemplate = (
@@ -161,7 +161,7 @@ export const platformReminderEmailTemplate = (
   if (params.template === "custom") {
     const subject = (params.customSubject || "A message from Phinmon").trim();
     const headline = (params.customHeadline || subject).trim();
-    const messageHtml = `<p style="margin:0;font-size:18px;line-height:32px;">${formatMessageHtml(params.customMessage || "")}</p>`;
+    const messageHtml = `<p style="margin:0;font-size:17px;line-height:28px;">${formatMessageHtml(params.customMessage || "")}</p>`;
     const ctaLabel = params.ctaLabel?.trim() || "Open Phinmon";
 
     return {
