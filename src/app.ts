@@ -18,6 +18,9 @@ import paymentsRoutes from "./modules/payments/payments.routes";
 import adminRoutes from "./modules/admin/admin.routes";
 import analyticsRoutes from "./modules/analytics/analytics.routes";
 import configRoutes from "./modules/config/config.routes";
+import blogPublicRoutes from "./modules/blog/blog.public.routes";
+import blogAdminRoutes from "./modules/blog/blog.admin.routes";
+import { requireAuth, requireRole, requireTermsAccepted } from "./middleware/auth";
 import { sweepExpiredReservations } from "./modules/responses/reservation.service";
 
 const app = express();
@@ -45,7 +48,15 @@ app.use("/api/v1/surveys", surveysRoutes);
 app.use("/api/v1/responses", responsesRoutes);
 app.use("/api/v1/wallet", walletsRoutes);
 app.use("/api/v1/payments", paymentsRoutes);
+app.use(
+  "/api/v1/admin/blog",
+  requireAuth,
+  requireRole("admin"),
+  requireTermsAccepted,
+  blogAdminRoutes
+);
 app.use("/api/v1/admin", adminRoutes);
+app.use("/api/v1/blog", blogPublicRoutes);
 app.use("/api/v1/analytics", analyticsRoutes);
 app.use("/api/v1/config", configRoutes);
 

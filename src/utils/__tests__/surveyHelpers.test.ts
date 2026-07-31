@@ -41,6 +41,13 @@ describe("calculateReward", () => {
   it("enforces minimum premium reward", () => {
     expect(calculateReward(30, "premium")).toBe(200);
   });
+
+  it("rounds rewards to the nearest 5", () => {
+    // 217s ≈ 3.6167 min × 60 = 217 → rounds to 215
+    expect(calculateReward(217, "standard")).toBe(215);
+    // 218s ≈ 3.633 min × 60 = 218 → rounds to 220
+    expect(calculateReward(218, "standard")).toBe(220);
+  });
 });
 
 describe("calculateSurveyCost", () => {
@@ -49,6 +56,14 @@ describe("calculateSurveyCost", () => {
     expect(result.budget).toBe(30000);
     expect(result.platformFeeAmount).toBe(7500);
     expect(result.totalCost).toBe(37500);
+  });
+
+  it("rounds platform fee to the nearest 5", () => {
+    // 217 × 10 = 2170 budget; 25% = 542.5 → round 543 → nearest 5 = 545
+    const result = calculateSurveyCost(217, 10, 25);
+    expect(result.budget).toBe(2170);
+    expect(result.platformFeeAmount).toBe(545);
+    expect(result.totalCost).toBe(2715);
   });
 });
 

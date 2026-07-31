@@ -223,7 +223,11 @@ export const getSurveyById = async (surveyId: string, researcherId?: string) => 
   if (researcherId) query.researcherId = researcherId;
   const survey = await Survey.findOne(query);
   if (!survey) throw new AppError("Survey not found", 404);
-  return survey;
+  const obj = survey.toObject();
+  return {
+    ...obj,
+    isFull: survey.responsesReceived >= survey.responsesNeeded,
+  };
 };
 
 const resumePrepaidPayment = async (survey: ISurvey) => {
@@ -375,12 +379,22 @@ export const getAvailableSurveys = async (
   filter?: string
 ) => {
   const completedIds = await SurveyResponse.find({ userId }).distinct("surveyId");
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
+  // Open slots always; filled surveys stay visible for 1 week after creation.
   let surveys = await Survey.find({
     status: "ACTIVE",
     billingLocked: { $ne: true },
     _id: { $nin: completedIds },
-    $expr: { $lt: ["$responsesReceived", "$responsesNeeded"] },
+    $or: [
+      { $expr: { $lt: ["$responsesReceived", "$responsesNeeded"] } },
+      {
+        $and: [
+          { $expr: { $gte: ["$responsesReceived", "$responsesNeeded"] } },
+          { createdAt: { $gte: weekAgo } },
+        ],
+      },
+    ],
   }).sort({ createdAt: -1 });
 
   surveys = surveys.filter((s) => isVisibleSurvey(s.targetAudience));
@@ -403,7 +417,13 @@ export const getAvailableSurveys = async (
     surveys.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
-  return surveys;
+  return surveys.map((s) => {
+    const obj = s.toObject();
+    return {
+      ...obj,
+      isFull: s.responsesReceived >= s.responsesNeeded,
+    };
+  });
 };
 
 export const exportSurveyResponses = async (researcherId: string, surveyId: string) => {

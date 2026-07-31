@@ -75,6 +75,9 @@ export const calculateSurveyTime = (
   return { seconds, minutes };
 };
 
+/** Round NGN amounts to the nearest 5 (ends in 0 or 5). */
+export const roundToNearestFive = (amount: number): number => Math.round(amount / 5) * 5;
+
 export const calculateReward = (seconds: number, tier: RewardTier): number => {
   const cfg = config();
   const minutes = seconds / 60;
@@ -87,7 +90,8 @@ export const calculateReward = (seconds: number, tier: RewardTier): number => {
       ? MIN_PREMIUM_REWARD
       : MIN_STANDARD_REWARD;
 
-  return Math.max(min, Math.round(minutes * rate));
+  const raw = Math.max(min, Math.round(minutes * rate));
+  return Math.max(min, roundToNearestFive(raw));
 };
 
 export const getPlatformFeeRate = (): number => {
@@ -102,7 +106,7 @@ export const calculateSurveyCost = (
 ): SurveyCostResult => {
   const rate = platformFeeRate ?? getPlatformFeeRate();
   const budget = responsesNeeded * rewardPerResponse;
-  const platformFeeAmount = Math.round(budget * (rate / 100));
+  const platformFeeAmount = roundToNearestFive(Math.round(budget * (rate / 100)));
   const totalCost = budget + platformFeeAmount;
   return { budget, platformFeeAmount, totalCost, platformFeeRate: rate };
 };
@@ -110,7 +114,7 @@ export const calculateSurveyCost = (
 /** @deprecated PAYG billing removed  kept for dormant billing module */
 export const calculatePerResponseCost = (rewardPerResponse: number, platformFeeRate?: number) => {
   const rate = platformFeeRate ?? getPlatformFeeRate();
-  const platformFeeAmount = Math.round(rewardPerResponse * (rate / 100));
+  const platformFeeAmount = roundToNearestFive(Math.round(rewardPerResponse * (rate / 100)));
   return rewardPerResponse + platformFeeAmount;
 };
 
