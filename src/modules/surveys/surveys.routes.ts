@@ -192,6 +192,32 @@ router.post(
 );
 
 router.post(
+  "/:id/pause",
+  requireRole("researcher", "admin"),
+  validate(Joi.object({})),
+  asyncHandler(async (req, res) => {
+    const survey = await surveysService.pauseSurvey(
+      req.user!._id.toString(),
+      String(req.params.id)
+    );
+    res.json({ success: true, survey });
+  })
+);
+
+router.post(
+  "/:id/resume",
+  requireRole("researcher", "admin"),
+  validate(Joi.object({})),
+  asyncHandler(async (req, res) => {
+    const survey = await surveysService.resumeSurvey(
+      req.user!._id.toString(),
+      String(req.params.id)
+    );
+    res.json({ success: true, survey });
+  })
+);
+
+router.post(
   "/:id/enable-analytics",
     requireRole("researcher", "admin"),
   validate(Joi.object({})),

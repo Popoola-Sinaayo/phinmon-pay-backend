@@ -20,6 +20,7 @@ import analyticsRoutes from "./modules/analytics/analytics.routes";
 import configRoutes from "./modules/config/config.routes";
 import blogPublicRoutes from "./modules/blog/blog.public.routes";
 import blogAdminRoutes from "./modules/blog/blog.admin.routes";
+import feedbackRoutes from "./modules/feedback/feedback.routes";
 import { requireAuth, requireRole, requireTermsAccepted } from "./middleware/auth";
 import { sweepExpiredReservations } from "./modules/responses/reservation.service";
 
@@ -46,6 +47,7 @@ app.use("/api/v1/users", usersRoutes);
 app.use("/api/v1/verification", verificationRoutes);
 app.use("/api/v1/surveys", surveysRoutes);
 app.use("/api/v1/responses", responsesRoutes);
+app.use("/api/v1/feedback", feedbackRoutes);
 app.use("/api/v1/wallet", walletsRoutes);
 app.use("/api/v1/payments", paymentsRoutes);
 app.use(

@@ -479,6 +479,46 @@ export const exportSurveyResponses = async (researcherId: string, surveyId: stri
   return { csv, filename: `survey-${surveyId}-responses.csv` };
 };
 
+export const pauseSurvey = async (researcherId: string, surveyId: string) => {
+  const survey = await Survey.findOne({ _id: surveyId, researcherId });
+  if (!survey) throw new AppError("Survey not found", 404);
+  if (survey.status !== "ACTIVE") {
+    throw new AppError("Only active projects can be paused", 400);
+  }
+  if (survey.billingLocked) {
+    throw new AppError(
+      survey.billingLockReason || "This project is locked due to a billing issue",
+      400
+    );
+  }
+
+  survey.status = "PAUSED";
+  await survey.save();
+  return survey;
+};
+
+export const resumeSurvey = async (researcherId: string, surveyId: string) => {
+  const survey = await Survey.findOne({ _id: surveyId, researcherId });
+  if (!survey) throw new AppError("Survey not found", 404);
+  if (survey.status !== "PAUSED") {
+    throw new AppError("Only paused projects can be resumed", 400);
+  }
+  if (survey.billingLocked) {
+    throw new AppError(
+      survey.billingLockReason ||
+        "This project is locked due to a billing issue and cannot be resumed yet",
+      400
+    );
+  }
+  if (survey.responsesReceived >= survey.responsesNeeded) {
+    throw new AppError("This project has already collected all needed responses", 400);
+  }
+
+  survey.status = "ACTIVE";
+  await survey.save();
+  return survey;
+};
+
 export const getResearcherDashboard = async (researcherId: string) => {
   const surveys = await Survey.find({ researcherId });
   const activeCampaigns = surveys.filter((s) => s.status === "ACTIVE").length;

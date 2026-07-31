@@ -134,6 +134,16 @@ router.get(
 );
 
 router.get(
+  "/feedback",
+  asyncHandler(async (req, res) => {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const result = await adminService.listFeedback(page, limit);
+    res.json({ success: true, ...result });
+  })
+);
+
+router.get(
   "/emails/history",
   asyncHandler(async (req, res) => {
     const page = parseInt(req.query.page as string) || 1;

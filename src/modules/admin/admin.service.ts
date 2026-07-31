@@ -12,6 +12,8 @@ import { Withdrawal } from "../wallets/withdrawal.model";
 import { FraudFlag } from "./fraudFlag.model";
 import { logAudit } from "./auditLog.model";
 import { AdminEmailCampaign } from "./adminEmailCampaign.model";
+import { listSurveyFeedback } from "../feedback/feedback.service";
+import { SurveyFeedback } from "../feedback/feedback.model";
 
 const log = createLogger("Admin");
 const EMAIL_BATCH_SIZE = 15;
@@ -182,6 +184,8 @@ export const getFraudFlags = async () => {
     .limit(100);
 };
 
+export const listFeedback = listSurveyFeedback;
+
 export const getAdminStats = async () => {
   const since30 = daysAgo(30);
   const since7 = daysAgo(7);
@@ -207,6 +211,7 @@ export const getAdminStats = async () => {
     earningsAgg,
     withdrawalsAgg,
     activeSurveys,
+    feedbackCount,
   ] = await Promise.all([
     User.countDocuments(),
     Survey.countDocuments(),
@@ -246,6 +251,7 @@ export const getAdminStats = async () => {
       { $group: { _id: null, total: { $sum: "$amount" } } },
     ]),
     Survey.countDocuments({ status: "ACTIVE" }),
+    SurveyFeedback.countDocuments(),
   ]);
 
   const toBreakdown = (rows: Array<{ _id: string; count: number }>) =>
@@ -260,6 +266,7 @@ export const getAdminStats = async () => {
     transactions,
     withdrawals,
     fraudFlags,
+    feedbackCount,
     activeSurveys,
     newUsers7d,
     newUsers30d,
