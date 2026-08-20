@@ -1,6 +1,36 @@
-const NIN_RETRY_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+const MS_PER_HOUR = 60 * 60 * 1000;
+const MS_PER_MINUTE = 60 * 1000;
 
-export const NIN_RETRY_COOLDOWN_HOURS = 24;
+/** First failed billed attempt waits this many hours. */
+export const NIN_RETRY_BASE_HOURS = 1;
+/** Cap so repeated failures cannot lock an account indefinitely. */
+export const NIN_RETRY_MAX_HOURS = 24;
+
+/** @deprecated Use getNinCooldownHours — kept as the first-attempt wait. */
+export const NIN_RETRY_COOLDOWN_HOURS = NIN_RETRY_BASE_HOURS;
+
+/**
+ * Escalating wait after billed verification attempts: 1h, 2h, 4h, 8h, 16h, then 24h cap.
+ * `failedAttemptCount` is 1-based (first failure → 1 hour).
+ */
+export function getNinCooldownHours(failedAttemptCount: number): number {
+  const n = Math.max(1, Math.floor(failedAttemptCount) || 1);
+  return Math.min(NIN_RETRY_BASE_HOURS * 2 ** (n - 1), NIN_RETRY_MAX_HOURS);
+}
+
+export function getNinLockUntil(failedAttemptCount: number, from = new Date()): Date {
+  return new Date(from.getTime() + getNinCooldownHours(failedAttemptCount) * MS_PER_HOUR);
+}
+
+export function formatNinRetryWait(remainingMs: number): string {
+  const ms = Math.max(0, remainingMs);
+  if (ms >= MS_PER_HOUR) {
+    const hours = Math.ceil(ms / MS_PER_HOUR);
+    return `${hours} hour${hours === 1 ? "" : "s"}`;
+  }
+  const minutes = Math.max(1, Math.ceil(ms / MS_PER_MINUTE));
+  return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+}
 
 export function normalizeName(name: string): string {
   return name
@@ -52,9 +82,9 @@ export function dobMatch(registeredDob: Date | string, ninDob?: string): boolean
   return formatDateOnly(registeredDob) === formatDateOnly(ninDob);
 }
 
-export function getNinLockExpiry(lastFailedAt?: Date | null): Date | null {
+export function getNinLockExpiry(lastFailedAt?: Date | null, failedAttemptCount = 1): Date | null {
   if (!lastFailedAt) return null;
-  return new Date(lastFailedAt.getTime() + NIN_RETRY_COOLDOWN_MS);
+  return getNinLockUntil(failedAttemptCount, lastFailedAt);
 }
 
 export function isNinLocked(lockedUntil?: Date | null): boolean {

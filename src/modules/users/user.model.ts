@@ -16,6 +16,7 @@ export interface IUser extends Document {
   ninHash?: string;
   ninData?: string;
   ninLockedUntil?: Date;
+  /** Count of billed verification attempts that did not succeed (NIN or liveness). */
   ninMismatchCount?: number;
   withdrawalPinHash?: string;
   termsAcceptedAt?: Date;
@@ -47,7 +48,7 @@ const userSchema = new Schema<IUser>(
     ninHash: { type: String, unique: true, sparse: true },
     ninData: { type: String },
     ninLockedUntil: { type: Date },
-    ninMismatchCount: { type: Number, default: 0 },
+    ninMismatchCount: { type: Number, default: 0 }, // billed failed attempts; drives escalating cooldown
     withdrawalPinHash: { type: String, select: false },
     termsAcceptedAt: { type: Date },
     termsVersion: { type: String },

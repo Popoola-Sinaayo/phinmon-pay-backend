@@ -2,6 +2,8 @@ import { describe, expect, it } from "@jest/globals";
 import {
   dobMatch,
   formatDateOnly,
+  formatNinRetryWait,
+  getNinCooldownHours,
   getNinRetryRemainingMs,
   isNinLocked,
   namesMatch,
@@ -33,5 +35,22 @@ describe("ninMatching", () => {
     const future = new Date(Date.now() + 60_000);
     expect(isNinLocked(future)).toBe(true);
     expect(getNinRetryRemainingMs(future)).toBeGreaterThan(0);
+  });
+
+  it("escalates cooldown hours after each failed attempt", () => {
+    expect(getNinCooldownHours(1)).toBe(1);
+    expect(getNinCooldownHours(2)).toBe(2);
+    expect(getNinCooldownHours(3)).toBe(4);
+    expect(getNinCooldownHours(4)).toBe(8);
+    expect(getNinCooldownHours(5)).toBe(16);
+    expect(getNinCooldownHours(6)).toBe(24);
+    expect(getNinCooldownHours(10)).toBe(24);
+    expect(getNinCooldownHours(0)).toBe(1);
+  });
+
+  it("formats remaining wait time", () => {
+    expect(formatNinRetryWait(90 * 60 * 1000)).toBe("2 hours");
+    expect(formatNinRetryWait(60 * 60 * 1000)).toBe("1 hour");
+    expect(formatNinRetryWait(90 * 1000)).toBe("2 minutes");
   });
 });

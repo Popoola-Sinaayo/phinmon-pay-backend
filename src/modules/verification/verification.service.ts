@@ -2,6 +2,7 @@ import { User } from "../users/user.model";
 import { Profile } from "../users/profile.model";
 import mongoose from "mongoose";
 import { getNINProvider } from "../../providers/nin";
+import type { NINResult } from "../../providers/nin/types";
 import { getLivenessProvider, isLivenessEnabled } from "../../providers/liveness";
 import { encryptNIN, decryptNIN, encryptJSON, hashValue } from "../../utils/encryption";
 import { logAudit } from "../admin/auditLog.model";
@@ -11,10 +12,13 @@ import type { NinCachedData } from "./ninCache.types";
 import {
   dobMatch,
   formatDateOnly,
+  formatNinRetryWait,
+  getNinCooldownHours,
+  getNinLockUntil,
   getNinRetryRemainingMs,
   isNinLocked,
   namesMatch,
-  NIN_RETRY_COOLDOWN_HOURS,
+  NIN_RETRY_MAX_HOURS,
 } from "../../utils/ninMatching";
 import config from "../../config";
 
@@ -75,9 +79,83 @@ const buildNinCache = (result: {
   verifiedAt: new Date().toISOString(),
 });
 
-const getNinStatusPayload = (user: InstanceType<typeof User>) => {
+type UserDoc = InstanceType<typeof User>;
+
+const lockDetails = (user: UserDoc) => {
+  const retryRemainingMs = getNinRetryRemainingMs(user.ninLockedUntil);
+  const attemptCount = user.ninMismatchCount || 0;
+  return {
+    ninLocked: true,
+    ninLockedUntil: user.ninLockedUntil?.toISOString() || null,
+    retryRemainingMs,
+    cooldownHours: getNinCooldownHours(attemptCount || 1),
+    nextCooldownHours: getNinCooldownHours(attemptCount + 1),
+  };
+};
+
+const throwNinLocked = (user: UserDoc) => {
+  const remainingMs = getNinRetryRemainingMs(user.ninLockedUntil);
+  const wait = formatNinRetryWait(remainingMs);
+  log.warn("Verification rejected: in cooldown lock", {
+    userId: user._id.toString(),
+    remainingMs,
+    attemptCount: user.ninMismatchCount || 0,
+  });
+  throw new AppError(`Verification locked. Try again in ${wait}.`, 429, lockDetails(user));
+};
+
+/**
+ * Atomically claim a billed verification attempt and start the cooldown *before*
+ * calling Qore ID, so double-clicks / retries cannot drain credits.
+ */
+const claimVerificationAttempt = async (userId: string): Promise<UserDoc> => {
+  const now = new Date();
+  const claimed = await User.findOneAndUpdate(
+    {
+      _id: userId,
+      $or: [
+        { ninLockedUntil: { $exists: false } },
+        { ninLockedUntil: null },
+        { ninLockedUntil: { $lte: now } },
+      ],
+    },
+    {
+      $inc: { ninMismatchCount: 1 },
+      $set: { ninLockedUntil: new Date(now.getTime() + NIN_RETRY_MAX_HOURS * 60 * 60 * 1000) },
+    },
+    { new: true }
+  );
+
+  if (!claimed) {
+    const user = await User.findById(userId);
+    if (!user) throw new AppError("User not found", 404);
+    if (isNinLocked(user.ninLockedUntil)) throwNinLocked(user);
+    throw new AppError("Verification locked. Try again later.", 429);
+  }
+
+  const hours = getNinCooldownHours(claimed.ninMismatchCount || 1);
+  claimed.ninLockedUntil = getNinLockUntil(claimed.ninMismatchCount || 1, now);
+  await claimed.save();
+
+  log.info("Claimed billed verification attempt", {
+    userId,
+    attemptCount: claimed.ninMismatchCount,
+    cooldownHours: hours,
+    lockedUntil: claimed.ninLockedUntil?.toISOString(),
+  });
+
+  return claimed;
+};
+
+const clearVerificationLock = (user: UserDoc) => {
+  user.set("ninLockedUntil", null);
+  user.ninMismatchCount = 0;
+};
+
+const getNinStatusPayload = (user: UserDoc) => {
   const locked = isNinLocked(user.ninLockedUntil);
   const retryRemainingMs = getNinRetryRemainingMs(user.ninLockedUntil);
+  const attemptCount = user.ninMismatchCount || 0;
 
   return {
     ninVerified: user.ninVerified,
@@ -88,15 +166,16 @@ const getNinStatusPayload = (user: InstanceType<typeof User>) => {
     ninLockedUntil: user.ninLockedUntil?.toISOString() || null,
     retryRemainingMs,
     retryRemainingHours: Math.ceil(retryRemainingMs / (60 * 60 * 1000)),
-    ninMismatchCount: user.ninMismatchCount || 0,
-    cooldownHours: NIN_RETRY_COOLDOWN_HOURS,
+    ninMismatchCount: attemptCount,
+    cooldownHours: getNinCooldownHours(attemptCount || 1),
+    nextCooldownHours: getNinCooldownHours(attemptCount + 1),
   };
 };
 
 export const verifyNIN = async (userId: string, nin: string, ip?: string) => {
   log.info("NIN verification started", { userId, nin: maskValue(nin), ip });
 
-  const user = await User.findById(userId);
+  let user = await User.findById(userId);
   if (!user) throw new AppError("User not found", 404);
 
   if (nin.length !== 11 || !/^\d+$/.test(nin)) {
@@ -125,17 +204,7 @@ export const verifyNIN = async (userId: string, nin: string, ip?: string) => {
   }
 
   if (isNinLocked(user.ninLockedUntil)) {
-    const hoursLeft = Math.ceil(getNinRetryRemainingMs(user.ninLockedUntil) / (60 * 60 * 1000));
-    log.warn("NIN rejected: in cooldown lock", { userId, hoursLeft });
-    throw new AppError(
-      `NIN verification locked. Try again in ${hoursLeft} hour${hoursLeft === 1 ? "" : "s"}.`,
-      429,
-      {
-        ninLocked: true,
-        ninLockedUntil: user.ninLockedUntil?.toISOString(),
-        retryRemainingMs: getNinRetryRemainingMs(user.ninLockedUntil),
-      }
-    );
+    throwNinLocked(user);
   }
 
   await blockDuplicateNin(userId, ninHash, ip);
@@ -148,44 +217,69 @@ export const verifyNIN = async (userId: string, nin: string, ip?: string) => {
     throw new AppError("Add your date of birth in onboarding before NIN verification", 400);
   }
 
+  // Lock before the billed Qore ID call so retries cannot drain credits.
+  user = await claimVerificationAttempt(userId);
+  const cooldownHours = getNinCooldownHours(user.ninMismatchCount || 1);
+  const waitLabel = `${cooldownHours} hour${cooldownHours === 1 ? "" : "s"}`;
+
   log.info("Calling NIN provider", { userId, provider: config().NIN_PROVIDER });
   const provider = getNINProvider();
-  const result = await provider.verifyNIN({
-    nin,
-    userId,
-    registeredName: user.name,
-    registeredDob: formatDateOnly(profile.dateOfBirth),
-  });
+  let result: NINResult;
+  try {
+    result = await provider.verifyNIN({
+      nin,
+      userId,
+      registeredName: user.name,
+      registeredDob: formatDateOnly(profile.dateOfBirth),
+    });
+  } catch (err) {
+    log.warn("NIN provider threw — cooldown already applied", {
+      userId,
+      cooldownHours,
+      message: err instanceof Error ? err.message : String(err),
+    });
+    throw new AppError(`NIN verification failed. You can retry in ${waitLabel}.`, 400, {
+      providerFailed: true,
+      ...lockDetails(user),
+    });
+  }
 
   await logAudit({
     userId: user._id,
     action: "NIN_VERIFICATION_ATTEMPT",
     resource: "user",
     resourceId: userId,
-    metadata: { providerSuccess: result.success },
+    metadata: { providerSuccess: result.success, attemptCount: user.ninMismatchCount },
     ip,
   });
 
   if (!result.success) {
-    log.warn("NIN provider returned failure", { userId, message: result.message });
-    throw new AppError(result.message || "NIN verification failed", 400);
+    log.warn("NIN provider returned failure — cooldown already applied", {
+      userId,
+      message: result.message,
+      cooldownHours,
+    });
+    throw new AppError(
+      `${(result.message || "NIN verification failed").replace(/\.?$/, ".")} You can retry in ${waitLabel}.`,
+      400,
+      {
+        providerFailed: true,
+        ...lockDetails(user),
+      }
+    );
   }
 
-  const nameMatches = namesMatch(user.name, result.firstName, result.lastName);
+  const nameMatches = namesMatch(user.name || "", result.firstName, result.lastName);
   const dobMatches = dobMatch(profile.dateOfBirth, result.dateOfBirth);
   log.info("NIN provider match result", { userId, nameMatches, dobMatches });
 
   if (!nameMatches || !dobMatches) {
-    user.ninMismatchCount = (user.ninMismatchCount || 0) + 1;
-    user.ninLockedUntil = new Date(Date.now() + NIN_RETRY_COOLDOWN_HOURS * 60 * 60 * 1000);
-    await user.save();
-
-    log.warn("NIN mismatch  applying cooldown", {
+    log.warn("NIN mismatch — cooldown already applied", {
       userId,
       nameMatches,
       dobMatches,
       mismatchCount: user.ninMismatchCount,
-      lockedUntil: user.ninLockedUntil.toISOString(),
+      lockedUntil: user.ninLockedUntil?.toISOString(),
     });
 
     await logAudit({
@@ -193,7 +287,7 @@ export const verifyNIN = async (userId: string, nin: string, ip?: string) => {
       action: "NIN_MISMATCH",
       resource: "user",
       resourceId: userId,
-      metadata: { nameMatches, dobMatches },
+      metadata: { nameMatches, dobMatches, attemptCount: user.ninMismatchCount },
       ip,
     });
 
@@ -202,14 +296,13 @@ export const verifyNIN = async (userId: string, nin: string, ip?: string) => {
     if (!dobMatches) mismatchParts.push("date of birth");
 
     throw new AppError(
-      `Your NIN does not match the ${mismatchParts.join(" and ")} on your profile. You can retry in ${NIN_RETRY_COOLDOWN_HOURS} hours.`,
+      `Your NIN does not match the ${mismatchParts.join(" and ")} on your profile. You can retry in ${waitLabel}.`,
       400,
       {
         mismatch: true,
         nameMatches,
         dobMatches,
-        ninLockedUntil: user.ninLockedUntil.toISOString(),
-        retryRemainingMs: getNinRetryRemainingMs(user.ninLockedUntil),
+        ...lockDetails(user),
       }
     );
   }
@@ -219,8 +312,7 @@ export const verifyNIN = async (userId: string, nin: string, ip?: string) => {
   user.encryptedNin = encryptNIN(nin);
   user.ninHash = ninHash;
   user.ninData = encryptJSON(buildNinCache(result));
-  user.ninLockedUntil = undefined;
-  user.ninMismatchCount = 0;
+  clearVerificationLock(user);
 
   try {
     await user.save();
@@ -290,24 +382,43 @@ export const startLiveness = async (userId: string) => {
     throw new AppError("NIN data missing. Complete NIN verification first.", 400);
   }
   if (user.livenessVerified) throw new AppError("Already premium verified", 400);
+  if (isNinLocked(user.ninLockedUntil)) throwNinLocked(user);
+
+  const lockedUser = await claimVerificationAttempt(userId);
+  const cooldownHours = getNinCooldownHours(lockedUser.ninMismatchCount || 1);
+  const waitLabel = `${cooldownHours} hour${cooldownHours === 1 ? "" : "s"}`;
 
   log.info("Starting NIN liveness verification session", {
     userId,
     nin: maskValue(decryptNIN(user.encryptedNin)),
   });
 
-  const idNumber = decryptNIN(user.encryptedNin);
-  const provider = getLivenessProvider();
-  // Pass NIN to the provider for session setup only — do not return raw NIN to the browser.
-  const session = await provider.startVerification(userId, { idNumber });
+  try {
+    const idNumber = decryptNIN(user.encryptedNin);
+    const provider = getLivenessProvider();
+    // Pass NIN to the provider for session setup only — do not return raw NIN to the browser.
+    const session = await provider.startVerification(userId, { idNumber });
 
-  log.info("NIN liveness verification session created", {
-    userId,
-    sessionId: session.sessionId,
-  });
+    log.info("NIN liveness verification session created", {
+      userId,
+      sessionId: session.sessionId,
+    });
 
-  const { idNumber: _omitNin, ...safeSession } = session;
-  return safeSession;
+    const { idNumber: _omitNin, ...safeSession } = session;
+    return safeSession;
+  } catch (err) {
+    log.warn("Liveness session mint failed — cooldown already applied", {
+      userId,
+      cooldownHours,
+      message: err instanceof Error ? err.message : String(err),
+    });
+    if (err instanceof AppError) throw err;
+    throw new AppError(
+      `Could not start liveness verification. You can retry in ${waitLabel}.`,
+      400,
+      lockDetails(lockedUser)
+    );
+  }
 };
 
 export const completeLiveness = async (userId: string, sessionId: string) => {
@@ -324,11 +435,19 @@ export const completeLiveness = async (userId: string, sessionId: string) => {
 
   if (!result.success) {
     log.warn("NIN liveness verification failed", { userId, sessionId, message: result.message });
-    throw new AppError(result.message || "Liveness verification failed", 400);
+    const wait = formatNinRetryWait(getNinRetryRemainingMs(user.ninLockedUntil));
+    throw new AppError(
+      `${result.message || "Liveness verification failed"}${
+        isNinLocked(user.ninLockedUntil) ? ` You can retry in ${wait}.` : ""
+      }`,
+      400,
+      isNinLocked(user.ninLockedUntil) ? lockDetails(user) : undefined
+    );
   }
 
   user.livenessVerified = true;
   user.status = "PREMIUM";
+  clearVerificationLock(user);
   await user.save();
 
   log.info("NIN liveness verification complete  user is now PREMIUM", { userId });
