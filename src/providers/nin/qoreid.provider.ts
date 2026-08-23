@@ -1,4 +1,9 @@
 import { qoreIdClient } from "../qoreid/qoreid.client";
+import {
+  isProviderBillingError,
+  PROVIDER_TEMP_UNAVAILABLE_MESSAGE,
+  sanitizeProviderErrorMessage,
+} from "../qoreid/errors";
 import { splitFullName } from "../../utils/ninMatching";
 import { NINProvider, NINVerifyPayload, NINResult } from "./types";
 
@@ -35,9 +40,17 @@ export class QoreIdNINProvider implements NINProvider {
       });
 
       if (data.status?.status && data.status.status !== "verified") {
+        const raw = data.message || "NIN verification failed";
+        if (isProviderBillingError(raw)) {
+          return {
+            success: false,
+            message: PROVIDER_TEMP_UNAVAILABLE_MESSAGE,
+            providerUnavailable: true,
+          };
+        }
         return {
           success: false,
-          message: data.message || "NIN verification failed",
+          message: sanitizeProviderErrorMessage(raw),
         };
       }
 
@@ -60,10 +73,17 @@ export class QoreIdNINProvider implements NINProvider {
         message: "NIN verified via QoreID",
       };
     } catch (err: unknown) {
+      if (isProviderBillingError(err)) {
+        return {
+          success: false,
+          message: PROVIDER_TEMP_UNAVAILABLE_MESSAGE,
+          providerUnavailable: true,
+        };
+      }
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
         "NIN verification failed";
-      return { success: false, message };
+      return { success: false, message: sanitizeProviderErrorMessage(message) };
     }
   }
 }

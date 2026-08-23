@@ -18,6 +18,8 @@ export interface NINResult {
   photo?: string;
   providerId?: number;
   message?: string;
+  /** Provider/billing outage — not a user NIN problem */
+  providerUnavailable?: boolean;
 }
 
 export interface NINProvider {

@@ -20,6 +20,10 @@ import {
   namesMatch,
   NIN_RETRY_MAX_HOURS,
 } from "../../utils/ninMatching";
+import {
+  isProviderBillingError,
+  PROVIDER_TEMP_UNAVAILABLE_MESSAGE,
+} from "../../providers/qoreid/errors";
 import config from "../../config";
 
 const log = createLogger("Verification");
@@ -152,6 +156,22 @@ const clearVerificationLock = (user: UserDoc) => {
   user.ninMismatchCount = 0;
 };
 
+/** Provider billing/outage — not the user's fault; unlock and show a soft message. */
+const throwProviderUnavailable = async (
+  user: UserDoc,
+  rawMessage?: string
+): Promise<never> => {
+  log.warn("Identity provider temporarily unavailable (billing/outage sanitized for user)", {
+    userId: user._id.toString(),
+    rawMessage,
+  });
+  clearVerificationLock(user);
+  await user.save();
+  throw new AppError(PROVIDER_TEMP_UNAVAILABLE_MESSAGE, 503, {
+    providerUnavailable: true,
+  });
+};
+
 const getNinStatusPayload = (user: UserDoc) => {
   const locked = isNinLocked(user.ninLockedUntil);
   const retryRemainingMs = getNinRetryRemainingMs(user.ninLockedUntil);
@@ -233,11 +253,14 @@ export const verifyNIN = async (userId: string, nin: string, ip?: string) => {
       registeredDob: formatDateOnly(profile.dateOfBirth),
     });
   } catch (err) {
-    log.warn("NIN provider threw — cooldown already applied", {
+    log.warn("NIN provider threw  cooldown already applied", {
       userId,
       cooldownHours,
       message: err instanceof Error ? err.message : String(err),
     });
+    if (isProviderBillingError(err)) {
+      await throwProviderUnavailable(user, err instanceof Error ? err.message : String(err));
+    }
     throw new AppError(`NIN verification failed. You can retry in ${waitLabel}.`, 400, {
       providerFailed: true,
       ...lockDetails(user),
@@ -254,11 +277,15 @@ export const verifyNIN = async (userId: string, nin: string, ip?: string) => {
   });
 
   if (!result.success) {
-    log.warn("NIN provider returned failure — cooldown already applied", {
+    log.warn("NIN provider returned failure  cooldown already applied", {
       userId,
       message: result.message,
       cooldownHours,
+      providerUnavailable: !!result.providerUnavailable,
     });
+    if (result.providerUnavailable || isProviderBillingError(result.message)) {
+      await throwProviderUnavailable(user, result.message);
+    }
     throw new AppError(
       `${(result.message || "NIN verification failed").replace(/\.?$/, ".")} You can retry in ${waitLabel}.`,
       400,
@@ -274,7 +301,7 @@ export const verifyNIN = async (userId: string, nin: string, ip?: string) => {
   log.info("NIN provider match result", { userId, nameMatches, dobMatches });
 
   if (!nameMatches || !dobMatches) {
-    log.warn("NIN mismatch — cooldown already applied", {
+    log.warn("NIN mismatch  cooldown already applied", {
       userId,
       nameMatches,
       dobMatches,
@@ -396,7 +423,7 @@ export const startLiveness = async (userId: string) => {
   try {
     const idNumber = decryptNIN(user.encryptedNin);
     const provider = getLivenessProvider();
-    // Pass NIN to the provider for session setup only — do not return raw NIN to the browser.
+    // Pass NIN to the provider for session setup only  do not return raw NIN to the browser.
     const session = await provider.startVerification(userId, { idNumber });
 
     log.info("NIN liveness verification session created", {
@@ -407,11 +434,17 @@ export const startLiveness = async (userId: string) => {
     const { idNumber: _omitNin, ...safeSession } = session;
     return safeSession;
   } catch (err) {
-    log.warn("Liveness session mint failed — cooldown already applied", {
+    log.warn("Liveness session mint failed  cooldown already applied", {
       userId,
       cooldownHours,
       message: err instanceof Error ? err.message : String(err),
     });
+    if (isProviderBillingError(err)) {
+      await throwProviderUnavailable(
+        lockedUser,
+        err instanceof Error ? err.message : String(err)
+      );
+    }
     if (err instanceof AppError) throw err;
     throw new AppError(
       `Could not start liveness verification. You can retry in ${waitLabel}.`,
@@ -435,6 +468,9 @@ export const completeLiveness = async (userId: string, sessionId: string) => {
 
   if (!result.success) {
     log.warn("NIN liveness verification failed", { userId, sessionId, message: result.message });
+    if (isProviderBillingError(result.message)) {
+      await throwProviderUnavailable(user, result.message);
+    }
     const wait = formatNinRetryWait(getNinRetryRemainingMs(user.ninLockedUntil));
     throw new AppError(
       `${result.message || "Liveness verification failed"}${

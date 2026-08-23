@@ -6,7 +6,7 @@ export const NIN_RETRY_BASE_HOURS = 1;
 /** Cap so repeated failures cannot lock an account indefinitely. */
 export const NIN_RETRY_MAX_HOURS = 24;
 
-/** @deprecated Use getNinCooldownHours — kept as the first-attempt wait. */
+/** @deprecated Use getNinCooldownHours  kept as the first-attempt wait. */
 export const NIN_RETRY_COOLDOWN_HOURS = NIN_RETRY_BASE_HOURS;
 
 /**

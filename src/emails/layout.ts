@@ -142,7 +142,7 @@ export type PremiumEmailOptions = {
   footerNote?: string;
 };
 
-/** Edge-to-edge broadcast — one padding layer, 100% width, no nested message box. */
+/** Edge-to-edge broadcast  one padding layer, 100% width, no nested message box. */
 export const renderPremiumBroadcastEmail = (options: PremiumEmailOptions): string => {
   const greeting = options.recipientName
     ? `Hi ${escapeHtml(options.recipientName)},`

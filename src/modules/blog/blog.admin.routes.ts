@@ -6,12 +6,26 @@ import * as blogService from "./blog.service";
 
 const router = Router();
 
+const coverImageSchema = Joi.string()
+  .allow("", null)
+  .optional()
+  .custom((value, helpers) => {
+    if (value == null || value === "") return value;
+    const v = String(value).trim();
+    // Absolute http(s) URLs or site-relative paths (e.g. /blog/covers/…)
+    if (/^https?:\/\//i.test(v) || /^\/[\w./\-_%]+$/.test(v)) return v;
+    return helpers.error("any.invalid");
+  }, "cover image url or path")
+  .messages({
+    "any.invalid": "Cover image must be an http(s) URL or a site path starting with /",
+  });
+
 const postBodySchema = Joi.object({
   title: Joi.string().min(3).max(200).required(),
   slug: Joi.string().max(120).allow("", null).optional(),
   excerpt: Joi.string().min(10).max(500).required(),
   body: Joi.string().min(20).required(),
-  coverImageUrl: Joi.string().uri().allow("", null).optional(),
+  coverImageUrl: coverImageSchema,
   status: Joi.string().valid("draft", "published").optional(),
 });
 
@@ -20,7 +34,7 @@ const postUpdateSchema = Joi.object({
   slug: Joi.string().max(120).allow("", null).optional(),
   excerpt: Joi.string().min(10).max(500).optional(),
   body: Joi.string().min(20).optional(),
-  coverImageUrl: Joi.string().uri().allow("", null).optional(),
+  coverImageUrl: coverImageSchema,
   status: Joi.string().valid("draft", "published").optional(),
 }).min(1);
 

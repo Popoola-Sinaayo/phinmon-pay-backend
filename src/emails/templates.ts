@@ -194,7 +194,7 @@ export const platformReminderEmailTemplate = (
   return {
     subject: "Reminder: use Phinmon today",
     html: renderEmailLayout({
-      preheader: "Come back to Phinmon — surveys and research await.",
+      preheader: "Come back to Phinmon  surveys and research await.",
       title: "Use Phinmon today",
       bodyHtml,
       footerNote: "You're receiving this because you have a Phinmon account.",
